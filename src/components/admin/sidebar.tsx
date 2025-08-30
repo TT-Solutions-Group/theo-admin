@@ -31,7 +31,7 @@ const navItems = [
   // { href: '/admin/user-cards', label: 'Cards', icon: CreditCard },
   { href: '/admin/subscriptions', label: 'Subscriptions', icon: Repeat },
   { href: '/admin/marketing', label: 'Marketing', icon: Megaphone },
-  { href: '/admin/budgets', label: 'Budgets', icon: Wallet },
+  { href: '/admin/budgets', label: 'Limits', icon: Wallet },
 ]
 
 export function Sidebar() {

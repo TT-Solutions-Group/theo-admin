@@ -47,17 +47,29 @@ export async function fetchStats() {
 		supabase.from('user_subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'active'),
 	])
 
+	// Calculate total revenue from active subscriptions
 	let totalRevenue = 0
 	try {
-		const { data } = await getSupabaseAdmin().rpc('sum_paid_revenue')
-		if (typeof data === 'number') totalRevenue = data
-	} catch { /* optional RPC not present */ }
+		const { data: subscriptions } = await supabase
+			.from('user_subscriptions')
+			.select('amount, currency')
+			.eq('status', 'active')
+		
+		if (subscriptions) {
+			totalRevenue = subscriptions.reduce((sum, sub) => {
+				// All subscriptions should be in UZS, but just in case
+				return sum + (sub.amount || 0)
+			}, 0)
+		}
+	} catch (e) {
+		console.error('Error calculating revenue:', e)
+	}
 
 	return {
 		users: usersRes.count ?? 0,
 		transactions: txRes.count ?? 0,
 		activeSubscriptions: activeSubsRes.count ?? 0,
-		totalRevenue,
+		totalRevenue, // This is now in UZS from subscriptions
 	}
 }
 

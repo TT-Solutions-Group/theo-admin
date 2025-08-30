@@ -5,13 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
 
 function formatCurrency(amount: number): string {
+  if (amount >= 1000000000) {
+    return `${(amount / 1000000000).toFixed(1)}B UZS`
+  }
   if (amount >= 1000000) {
-    return `$${(amount / 1000000).toFixed(1)}M`
+    return `${(amount / 1000000).toFixed(1)}M UZS`
   }
   if (amount >= 1000) {
-    return `$${(amount / 1000).toFixed(1)}K`
+    return `${(amount / 1000).toFixed(1)}K UZS`
   }
-  return `$${amount.toFixed(0)}`
+  return `${amount.toFixed(0)} UZS`
 }
 
 export default async function AdminHome() {

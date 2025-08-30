@@ -7,13 +7,13 @@ export default async function BudgetsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Budgets</h1>
-        <p className="text-[rgb(var(--muted-foreground))] mt-2">Per-user budgets by category</p>
+        <h1 className="text-3xl font-bold">Limits</h1>
+        <p className="text-[rgb(var(--muted-foreground))] mt-2">Per-user spending limits by category</p>
       </div>
 
       <Card elevated>
         <CardHeader>
-          <CardTitle>All Budgets</CardTitle>
+          <CardTitle>All Limits</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -33,15 +33,15 @@ export default async function BudgetsPage() {
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-center py-8 text-[rgb(var(--muted-foreground))]">
-                      No budgets found
+                      No limits found
                     </td>
                   </tr>
                 ) : (
                   rows.map((r) => (
                     <tr key={r.id}>
                       <td className="font-mono text-sm">#{r.id}</td>
-                      <td>{r.user ? (r.user.display_name || [r.user.first_name, r.user.last_name].filter(Boolean).join(' ') || r.user.username || `User #${r.user_id}`) : `#${r.user_id}`}</td>
-                      <td>{r.category?.name || `#${r.category_id}`}</td>
+                      <td>{r.user?.[0] ? (r.user[0].display_name || [r.user[0].first_name, r.user[0].last_name].filter(Boolean).join(' ') || r.user[0].username || `User #${r.user_id}`) : `#${r.user_id}`}</td>
+                      <td>{r.category?.[0]?.name || `#${r.category_id}`}</td>
                       <td>{r.amount}</td>
                       <td className="uppercase">{r.currency || 'USD'}</td>
                       <td>{new Date(r.start_date).toLocaleDateString()}</td>
