@@ -1,26 +1,188 @@
-@import "tailwindcss";
+/* Inter font import - must be at the top */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    
+    /* WHOOP Brand Colors */
+    --whoop-green: 0 255 136;
+    --whoop-red: 255 59 48;
+    --whoop-yellow: 255 214 10;
+    --whoop-blue: 0 122 255;
+    --whoop-purple: 151 71 255;
+    --whoop-cyan: 0 194 255;
+    
+    /* Dark Theme Colors */
+    --background: 10 10 10;
+    --background-secondary: 26 26 26;
+    --card: 30 30 30;
+    --card-elevated: 37 37 37;
+    --foreground: 255 255 255;
+    --muted-foreground: 142 142 147;
+    --secondary-foreground: 179 179 179;
+    --border: 44 44 46;
+    --input: 37 37 37;
+    --ring: var(--whoop-green);
+    --radius: 20px;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: rgb(var(--background));
+    color: rgb(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* WHOOP Card Styles */
+  .whoop-card {
+    @apply bg-card rounded-[20px] p-6;
+  }
+  
+  .whoop-card-elevated {
+    @apply bg-card-elevated rounded-[20px] p-6 shadow-lg;
+  }
+  
+  /* WHOOP Button Styles */
+  .whoop-button-primary {
+    @apply bg-whoop-green text-black font-semibold px-6 py-3 rounded-[16px] 
+           transition-all duration-200 hover:opacity-90 active:scale-95;
+  }
+  
+  .whoop-button-secondary {
+    @apply bg-card-elevated text-foreground font-medium px-6 py-3 
+           rounded-[16px] border border-border transition-all duration-200 
+           hover:bg-card active:scale-95;
+  }
+  
+  .whoop-button-danger {
+    @apply bg-whoop-red text-white font-semibold px-6 py-3 rounded-[16px] 
+           transition-all duration-200 hover:opacity-90 active:scale-95;
+  }
+  
+  /* WHOOP Input Styles */
+  .whoop-input {
+    @apply w-full bg-input text-foreground 
+           placeholder-muted-foreground rounded-[12px] px-4 py-3 
+           border border-border transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-whoop-green 
+           focus:border-transparent;
+  }
+  
+  /* WHOOP Metric Display */
+  .whoop-metric {
+    @apply text-4xl font-bold tracking-tight;
+  }
+  
+  .whoop-metric-label {
+    @apply text-sm text-muted-foreground uppercase tracking-wide;
+  }
+  
+  /* WHOOP Badge Styles */
+  .whoop-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .whoop-badge-green {
+    @apply bg-whoop-green/20 text-whoop-green;
+  }
+  
+  .whoop-badge-red {
+    @apply bg-whoop-red/20 text-whoop-red;
+  }
+  
+  .whoop-badge-yellow {
+    @apply bg-whoop-yellow/20 text-whoop-yellow;
+  }
+  
+  .whoop-badge-blue {
+    @apply bg-whoop-blue/20 text-whoop-blue;
+  }
+  
+  /* WHOOP Table Styles */
+  .whoop-table {
+    @apply w-full;
+  }
+  
+  .whoop-table thead {
+    @apply border-b border-border;
+  }
+  
+  .whoop-table th {
+    @apply text-left text-sm font-medium text-muted-foreground 
+           uppercase tracking-wide px-4 py-3;
+  }
+  
+  .whoop-table td {
+    @apply px-4 py-3 text-sm;
+  }
+  
+  .whoop-table tbody tr {
+    @apply border-b border-border transition-colors hover:bg-card;
+  }
+}
+
+@layer utilities {
+  /* Loading States */
+  .whoop-spinner {
+    @apply animate-spin h-5 w-5 text-whoop-yellow;
+  }
+  
+  .whoop-shimmer {
+    @apply animate-pulse bg-card-elevated;
+  }
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid rgb(var(--whoop-green));
+  outline-offset: 2px;
+}
+
+/* Disable focus outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Selection styles */
+::selection {
+  background-color: rgb(var(--whoop-green) / 0.3);
+  color: rgb(var(--foreground));
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-background-secondary;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground;
 }

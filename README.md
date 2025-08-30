@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Theo Admin Dashboard
 
-## Getting Started
+Admin dashboard to manage users, payments, and project statistics.
 
-First, run the development server:
+## Prerequisites
+- Node.js 18+
+- Supabase project (same schema used by your main app)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Environment Variables
+Copy `env.example` to `.env.local` and fill values:
+
+- `SUPABASE_URL`: Your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY`: Service role key (server-only)
+- `ADMIN_DASHBOARD_PASSWORD`: Password to access the dashboard
+- `ADMIN_JWT_SECRET`: Random secret for signing admin session JWTs
+- `NEXT_PUBLIC_APP_NAME` (optional): Display name in the header
+
+Example:
+```
+SUPABASE_URL=https://xyzcompany.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...service_role_key...
+ADMIN_DASHBOARD_PASSWORD=change-me
+ADMIN_JWT_SECRET=long-random-string
+NEXT_PUBLIC_APP_NAME=Theo Admin
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Development
+```
+npm install
+npm run dev
+```
+Open `http://localhost:3000/login` and sign in with `ADMIN_DASHBOARD_PASSWORD`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build
+```
+npm run build
+npm run start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Features
+- Dashboard: total users, transactions, active subscriptions, total revenue (via `sum_paid_revenue` RPC if present)
+- Users: list, view, and update user fields (`first_name`, `last_name`, `username`, `language`, `default_currency`, `is_premium`)
+- Payments: list recent `payment_history` entries
+- Subscriptions: cancel a user subscription (sets `status='cancelled'`, `cancelled_at=now` in `user_subscriptions`)
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Security Notes
+- This app uses the Supabase Service Role key. Treat it as secret and server-only.
+- Keep the app private and ensure `ADMIN_DASHBOARD_PASSWORD` is strong.
+- Consider network restrictions (VPN/IP allowlist) in production.

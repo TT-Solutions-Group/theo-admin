@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/Users/isfun/Dev/Python/finumio/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/styles/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/styles/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/components/ui/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/components/ui/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/components/ui/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/app/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/app/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/components/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/lib/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/app/transactions/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/components/ui/**)",
+      "Bash(npm install:*)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/app/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/app/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/contexts/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/lib/**)",
+      "Read(/Users/isfun/Dev/Python/finumio/teodor-app/src/app/**)",
+      "Bash(npm uninstall:*)",
+      "mcp__railway__project_list",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
