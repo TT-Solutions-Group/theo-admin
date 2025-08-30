@@ -36,7 +36,7 @@ export default async function UserCategoriesPage() {
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r: any, idx: number) => (
+                  rows.map((r, idx) => (
                     <tr key={`${r.user_id}-${r.category_id}-${idx}`}>
                       <td>
                         {r.user ? (

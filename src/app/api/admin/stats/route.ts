@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 	try {
 		const stats = await fetchStats()
 		return NextResponse.json({ ok: true, stats })
-	} catch (e) {
+	} catch {
 		return NextResponse.json({ ok: false, error: 'Failed to fetch stats' }, { status: 500 })
 	}
 }

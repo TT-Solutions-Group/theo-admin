@@ -36,7 +36,7 @@ export default async function CategoryTranslationsPage() {
                     </td>
                   </tr>
                 ) : (
-                  translations.map((t: any) => (
+                  translations.map((t) => (
                     <tr key={t.id}>
                       <td className="font-mono text-sm">#{t.id}</td>
                       <td>#{t.category_id}</td>

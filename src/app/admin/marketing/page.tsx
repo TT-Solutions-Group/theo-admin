@@ -39,7 +39,7 @@ export default async function MarketingPage() {
                     </td>
                   </tr>
                 ) : (
-                  events.map((e: any) => (
+                  events.map((e) => (
                     <tr key={e.id}>
                       <td className="font-mono text-sm">#{e.id}</td>
                       <td className="font-medium">{e.event_name}</td>

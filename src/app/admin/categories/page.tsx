@@ -38,7 +38,7 @@ export default async function CategoriesPage() {
                     </td>
                   </tr>
                 ) : (
-                  categories.map((c: any) => (
+                  categories.map((c) => (
                     <tr key={c.id}>
                       <td className="font-mono text-sm">#{c.id}</td>
                       <td className="font-medium">{c.name}</td>

@@ -48,19 +48,19 @@ export default async function TransactionsPage() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((t: any) => (
+                  transactions.map((t) => (
                     <tr key={t.id}>
                       <td className="font-mono text-sm">#{t.id}</td>
                       <td>
-                        {t.user ? (
+                        {t.user?.[0] ? (
                           <span>
-                            {t.user.display_name || [t.user.first_name, t.user.last_name].filter(Boolean).join(' ') || t.user.username || `User #${t.user_id}`}
+                            {t.user[0].display_name || [t.user[0].first_name, t.user[0].last_name].filter(Boolean).join(' ') || t.user[0].username || `User #${t.user_id}`}
                           </span>
                         ) : (
                           <span>#{t.user_id}</span>
                         )}
                       </td>
-                      <td>{t.category?.name || `#${t.category_id}`}</td>
+                      <td>{t.category?.[0]?.name || `#${t.category_id}`}</td>
                       <td>{t.description || '—'}</td>
                       <td>
                         <Badge variant={t.type === 'income' ? 'green' : 'red'}>

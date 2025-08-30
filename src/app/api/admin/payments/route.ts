@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 	try {
 		const payments = await listPayments({ limit, offset })
 		return NextResponse.json({ ok: true, payments })
-	} catch (e) {
+	} catch {
 		return NextResponse.json({ ok: false, error: 'Failed to list payments' }, { status: 500 })
 	}
 }

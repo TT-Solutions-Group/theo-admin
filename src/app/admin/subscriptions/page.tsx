@@ -39,13 +39,13 @@ export default async function SubscriptionsPage() {
                     </td>
                   </tr>
                 ) : (
-                  subs.map((s: any) => (
+                  subs.map((s) => (
                     <tr key={s.id}>
                       <td className="font-mono text-sm">#{s.id}</td>
                       <td>
-                        {s.user ? (
+                        {s.user?.[0] ? (
                           <span>
-                            {s.user.display_name || [s.user.first_name, s.user.last_name].filter(Boolean).join(' ') || s.user.username || `User #${s.user_id}`}
+                            {s.user[0].display_name || [s.user[0].first_name, s.user[0].last_name].filter(Boolean).join(' ') || s.user[0].username || `User #${s.user_id}`}
                           </span>
                         ) : (
                           <span>#{s.user_id}</span>

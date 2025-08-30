@@ -90,7 +90,7 @@ export async function listUsers(params: { q?: string; limit?: number; offset?: n
 	const { data, error } = await query
 	console.log('Users query result:', { data, error })
 	if (error) throw error
-	return (data || []).map((u: any) => ({
+	return (data || []).map((u) => ({
 		...u,
 		terms_accepted: Boolean(u.terms_accepted_at),
 	})) as AdminUser[]
@@ -106,7 +106,7 @@ export async function getUserById(id: number) {
 	if (error) throw error
 	return ({
 		...data,
-		terms_accepted: Boolean((data as any).terms_accepted_at),
+		terms_accepted: Boolean(data?.terms_accepted_at),
 	}) as AdminUser
 }
 
