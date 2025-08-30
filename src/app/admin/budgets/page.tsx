@@ -37,7 +37,7 @@ export default async function BudgetsPage() {
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r: any) => (
+                  rows.map((r) => (
                     <tr key={r.id}>
                       <td className="font-mono text-sm">#{r.id}</td>
                       <td>{r.user ? (r.user.display_name || [r.user.first_name, r.user.last_name].filter(Boolean).join(' ') || r.user.username || `User #${r.user_id}`) : `#${r.user_id}`}</td>

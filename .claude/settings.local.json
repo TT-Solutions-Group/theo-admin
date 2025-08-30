@@ -27,7 +27,12 @@
       "mcp__railway__project_list",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "mcp__railway__service_create_from_repo",
+      "mcp__railway__variable_bulk_set",
+      "mcp__railway__deployment_status",
+      "mcp__railway__deployment_logs",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
