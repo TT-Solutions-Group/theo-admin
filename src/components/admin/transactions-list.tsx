@@ -18,17 +18,17 @@ interface Transaction {
 	title: string | null
 	description: string | null
 	voice_log_id: number | null
-	user?: Array<{
+	user?: {
 		id: number
 		username: string | null
 		first_name: string | null
 		last_name: string | null
 		display_name: string | null
-	}>
-	category?: Array<{
+	}
+	category?: {
 		id: number
 		name: string
-	}>
+	}
 }
 
 interface TransactionsListProps {
@@ -61,16 +61,16 @@ function formatAmount(amount: number, currency: string = 'USD') {
 }
 
 function getUserName(transaction: Transaction) {
-	const user = transaction.user?.[0]
+	const user = transaction.user
 	if (!user) return `User #${transaction.user_id}`
-	return user.display_name || 
+	return user.username ? `@${user.username}` :
+		user.display_name || 
 		[user.first_name, user.last_name].filter(Boolean).join(' ') || 
-		user.username || 
 		`User #${transaction.user_id}`
 }
 
 function getCategoryName(transaction: Transaction) {
-	return transaction.category?.[0]?.name || 'Uncategorized'
+	return transaction.category?.name || 'Uncategorized'
 }
 
 export function TransactionsList({ initialTransactions, groupBy, hasMore: initialHasMore }: TransactionsListProps) {
