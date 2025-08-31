@@ -1,86 +1,172 @@
-import { Badge } from '@/components/ui/badge'
+import { getTransactionStats, listTransactions } from '@/lib/supabase-admin'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { listTransactions } from '@/lib/supabase-admin'
+import { TransactionsList } from '@/components/admin/transactions-list'
+import { TrendingUp, TrendingDown, Activity, Calendar } from 'lucide-react'
+import Link from 'next/link'
 
-export default async function TransactionsPage() {
+export default async function TransactionsPage({ searchParams }: { searchParams: Promise<{ groupBy?: string }> }) {
+  const params = await searchParams
+  const groupBy = (params.groupBy || 'none') as 'none' | 'user' | 'category' | 'date'
+  
+  // Fetch initial transactions (first 100)
   const transactions = await listTransactions({ limit: 100, offset: 0 }).catch(() => [])
+  
+  // Fetch stats
+  const stats = await getTransactionStats().catch(() => ({
+    total: 0,
+    thisMonth: 0,
+    totalIncome: 0,
+    totalExpense: 0,
+    netAmount: 0
+  }))
+  
+  const hasMore = transactions.length === 100
 
-  function formatDate(date: string) {
-    try {
-      return new Date(date).toLocaleString()
-    } catch {
-      return date
-    }
+  function formatAmount(amount: number) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'UZS',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount).replace('UZS', 'UZS')
   }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Transactions</h1>
-        <p className="text-[rgb(var(--muted-foreground))] mt-2">Latest financial transactions</p>
+        <p className="text-[rgb(var(--muted-foreground))] mt-2">
+          Monitor all financial transactions across users
+        </p>
       </div>
 
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[rgb(var(--muted-foreground))]">Total Income</p>
+                <p className="text-2xl font-bold text-green-500">
+                  {formatAmount(stats.totalIncome)}
+                </p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[rgb(var(--muted-foreground))]">Total Expense</p>
+                <p className="text-2xl font-bold text-red-500">
+                  {formatAmount(stats.totalExpense)}
+                </p>
+              </div>
+              <TrendingDown className="w-8 h-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[rgb(var(--muted-foreground))]">Net Amount</p>
+                <p className={`text-2xl font-bold ${stats.netAmount >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {formatAmount(stats.netAmount)}
+                </p>
+              </div>
+              <Activity className="w-8 h-8 text-[rgb(var(--whoop-purple))]" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[rgb(var(--muted-foreground))]">This Month</p>
+                <p className="text-2xl font-bold">
+                  {stats.thisMonth.toLocaleString()}
+                </p>
+                <p className="text-xs text-[rgb(var(--muted-foreground))]">transactions</p>
+              </div>
+              <Calendar className="w-8 h-8 text-[rgb(var(--whoop-blue))]" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Grouping Options */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-[rgb(var(--muted-foreground))]">Group by:</span>
+            <div className="flex gap-2">
+              <Link href="/admin/transactions?groupBy=none">
+                <button className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  groupBy === 'none' 
+                    ? 'bg-[rgb(var(--whoop-green))] text-white' 
+                    : 'bg-[rgb(var(--card-elevated))] hover:bg-[rgb(var(--card-hover))]'
+                }`}>
+                  None
+                </button>
+              </Link>
+              <Link href="/admin/transactions?groupBy=user">
+                <button className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  groupBy === 'user' 
+                    ? 'bg-[rgb(var(--whoop-green))] text-white' 
+                    : 'bg-[rgb(var(--card-elevated))] hover:bg-[rgb(var(--card-hover))]'
+                }`}>
+                  User
+                </button>
+              </Link>
+              <Link href="/admin/transactions?groupBy=category">
+                <button className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  groupBy === 'category' 
+                    ? 'bg-[rgb(var(--whoop-green))] text-white' 
+                    : 'bg-[rgb(var(--card-elevated))] hover:bg-[rgb(var(--card-hover))]'
+                }`}>
+                  Category
+                </button>
+              </Link>
+              <Link href="/admin/transactions?groupBy=date">
+                <button className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  groupBy === 'date' 
+                    ? 'bg-[rgb(var(--whoop-green))] text-white' 
+                    : 'bg-[rgb(var(--card-elevated))] hover:bg-[rgb(var(--card-hover))]'
+                }`}>
+                  Date
+                </button>
+              </Link>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Transactions List */}
       <Card elevated>
         <CardHeader>
-          <CardTitle>Recent Transactions</CardTitle>
+          <CardTitle>
+            Transaction List
+            {transactions.length > 0 && (
+              <span className="text-sm font-normal text-[rgb(var(--muted-foreground))] ml-2">
+                (Showing {transactions.length} of {stats.total})
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="whoop-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>User</th>
-                  <th>Category</th>
-                  <th>Description</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                  <th>Currency</th>
-                  <th>Source</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="text-center py-8 text-[rgb(var(--muted-foreground))]">
-                      No transactions found
-                    </td>
-                  </tr>
-                ) : (
-                  transactions.map((t) => (
-                    <tr key={t.id}>
-                      <td className="font-mono text-sm">#{t.id}</td>
-                      <td>
-                        {t.user?.[0] ? (
-                          <span>
-                            {t.user[0].display_name || [t.user[0].first_name, t.user[0].last_name].filter(Boolean).join(' ') || t.user[0].username || `User #${t.user_id}`}
-                          </span>
-                        ) : (
-                          <span>#{t.user_id}</span>
-                        )}
-                      </td>
-                      <td>{t.category?.[0]?.name || `#${t.category_id}`}</td>
-                      <td>{t.description || '—'}</td>
-                      <td>
-                        <Badge variant={t.type === 'income' ? 'green' : 'red'}>
-                          {t.type}
-                        </Badge>
-                      </td>
-                      <td>{t.amount}</td>
-                      <td className="uppercase">{t.currency || 'USD'}</td>
-                      <td>{t.source || 'manual'}</td>
-                      <td className="text-sm text-[rgb(var(--muted-foreground))]">{formatDate(t.date)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <TransactionsList 
+            initialTransactions={transactions}
+            groupBy={groupBy}
+            hasMore={hasMore}
+          />
         </CardContent>
       </Card>
     </div>
   )
 }
-
-

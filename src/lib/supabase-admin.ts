@@ -166,14 +166,49 @@ export async function listPayments(params: { limit?: number; offset?: number }) 
 
 // Additional list helpers for other tables
 
-export async function listTransactions(params: { limit?: number; offset?: number }) {
+export async function getTransactionStats() {
 	const supabase = getSupabaseAdmin()
-	const { limit = 50, offset = 0 } = params
-	const { data, error } = await supabase
+	
+	const today = new Date()
+	const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
+	
+	const [totalRes, monthRes, incomeRes, expenseRes] = await Promise.all([
+		supabase.from('transactions').select('id', { count: 'exact', head: true }),
+		supabase.from('transactions').select('id', { count: 'exact', head: true })
+			.gte('date', startOfMonth),
+		supabase.from('transactions').select('amount')
+			.eq('type', 'income'),
+		supabase.from('transactions').select('amount')
+			.eq('type', 'expense'),
+	])
+	
+	const totalIncome = incomeRes.data?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+	const totalExpense = expenseRes.data?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+	
+	return {
+		total: totalRes.count ?? 0,
+		thisMonth: monthRes.count ?? 0,
+		totalIncome,
+		totalExpense,
+		netAmount: totalIncome - totalExpense
+	}
+}
+
+export async function listTransactions(params: { limit?: number; offset?: number; userId?: number; categoryId?: number; type?: string }) {
+	const supabase = getSupabaseAdmin()
+	const { limit = 50, offset = 0, userId, categoryId, type } = params
+	
+	let query = supabase
 		.from('transactions')
 		.select('id, user_id, category_id, amount, type, currency, date, created_at, source, title, description, voice_log_id, user:users!transactions_user_id_fkey(id, username, first_name, last_name, display_name), category:categories!transactions_category_id_fkey(id, name)')
 		.order('date', { ascending: false })
 		.range(offset, offset + limit - 1)
+	
+	if (userId) query = query.eq('user_id', userId)
+	if (categoryId) query = query.eq('category_id', categoryId)
+	if (type) query = query.eq('type', type)
+	
+	const { data, error } = await query
 	if (error) throw error
 	return data || []
 }
@@ -248,6 +283,47 @@ export async function listUserSubscriptions(params: { limit?: number; offset?: n
 		.range(offset, offset + limit - 1)
 	if (error) throw error
 	return data || []
+}
+
+export async function getMarketingStats() {
+	const supabase = getSupabaseAdmin()
+	
+	const today = new Date()
+	const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
+	const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay())).toISOString()
+	
+	const [totalRes, monthRes, weekRes, successRes, failedRes] = await Promise.all([
+		supabase.from('marketing_events').select('id', { count: 'exact', head: true }),
+		supabase.from('marketing_events').select('id', { count: 'exact', head: true })
+			.gte('created_at', startOfMonth),
+		supabase.from('marketing_events').select('id', { count: 'exact', head: true })
+			.gte('created_at', startOfWeek),
+		supabase.from('marketing_events').select('id', { count: 'exact', head: true })
+			.eq('status', 'success'),
+		supabase.from('marketing_events').select('id', { count: 'exact', head: true })
+			.eq('status', 'failed'),
+	])
+	
+	// Get event type breakdown
+	const { data: eventTypes } = await supabase
+		.from('marketing_events')
+		.select('event_name')
+	
+	const eventTypeCount: Record<string, number> = {}
+	if (eventTypes) {
+		eventTypes.forEach(e => {
+			eventTypeCount[e.event_name] = (eventTypeCount[e.event_name] || 0) + 1
+		})
+	}
+	
+	return {
+		total: totalRes.count ?? 0,
+		thisMonth: monthRes.count ?? 0,
+		thisWeek: weekRes.count ?? 0,
+		success: successRes.count ?? 0,
+		failed: failedRes.count ?? 0,
+		eventTypes: eventTypeCount
+	}
 }
 
 export async function listMarketingEvents(params: { limit?: number; offset?: number }) {
