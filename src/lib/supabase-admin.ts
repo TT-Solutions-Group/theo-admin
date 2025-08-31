@@ -273,6 +273,58 @@ export async function listUserCards(params: { limit?: number; offset?: number })
 	return data || []
 }
 
+export async function getSubscriptionStats() {
+	const supabase = getSupabaseAdmin()
+	
+	const [totalRes, activeRes, cancelledRes, failedRes] = await Promise.all([
+		supabase.from('user_subscriptions').select('id', { count: 'exact', head: true }),
+		supabase.from('user_subscriptions').select('id', { count: 'exact', head: true })
+			.eq('status', 'active'),
+		supabase.from('user_subscriptions').select('id', { count: 'exact', head: true })
+			.not('cancelled_at', 'is', null),
+		supabase.from('user_subscriptions').select('id', { count: 'exact', head: true })
+			.not('last_error', 'is', null),
+	])
+	
+	// Calculate MRR (Monthly Recurring Revenue)
+	let mrr = 0
+	try {
+		const { data: activeSubs } = await supabase
+			.from('user_subscriptions')
+			.select('amount, currency')
+			.eq('status', 'active')
+		
+		if (activeSubs) {
+			mrr = activeSubs.reduce((sum, sub) => sum + (sub.amount || 0), 0)
+		}
+	} catch (e) {
+		console.error('Error calculating MRR:', e)
+	}
+	
+	// Get plan type breakdown
+	const { data: planTypes } = await supabase
+		.from('user_subscriptions')
+		.select('plan_type')
+		.eq('status', 'active')
+	
+	const planTypeCount: Record<string, number> = {}
+	if (planTypes) {
+		planTypes.forEach(s => {
+			const plan = s.plan_type || 'unknown'
+			planTypeCount[plan] = (planTypeCount[plan] || 0) + 1
+		})
+	}
+	
+	return {
+		total: totalRes.count ?? 0,
+		active: activeRes.count ?? 0,
+		cancelled: cancelledRes.count ?? 0,
+		failed: failedRes.count ?? 0,
+		mrr,
+		planTypes: planTypeCount
+	}
+}
+
 export async function listUserSubscriptions(params: { limit?: number; offset?: number }) {
 	const supabase = getSupabaseAdmin()
 	const { limit = 100, offset = 0 } = params
