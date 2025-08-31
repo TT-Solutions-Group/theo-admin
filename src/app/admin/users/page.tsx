@@ -9,7 +9,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
 	const params = await searchParams
 	const q = (params.q || '').trim()
 	const premiumFilter = params.premium === 'true'
-	let users = await listUsers({ q, limit: 50, offset: 0 }).catch((error) => {
+	let users = await listUsers({ q, limit: 1000, offset: 0 }).catch((error) => {
 		console.error('Error fetching users:', error)
 		return []
 	})
