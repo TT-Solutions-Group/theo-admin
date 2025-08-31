@@ -73,6 +73,27 @@ export async function fetchStats() {
 	}
 }
 
+export async function getUserStats(q?: string) {
+	const supabase = getSupabaseAdmin()
+	
+	let totalQuery = supabase.from('users').select('id', { count: 'exact', head: true })
+	let premiumQuery = supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_premium', true)
+	
+	if (q && q.trim().length > 0) {
+		const searchFilter = `username.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`
+		totalQuery = totalQuery.or(searchFilter)
+		premiumQuery = premiumQuery.or(searchFilter)
+	}
+	
+	const [totalRes, premiumRes] = await Promise.all([totalQuery, premiumQuery])
+	
+	return {
+		total: totalRes.count ?? 0,
+		premium: premiumRes.count ?? 0,
+		free: (totalRes.count ?? 0) - (premiumRes.count ?? 0),
+	}
+}
+
 export async function listUsers(params: { q?: string; limit?: number; offset?: number }) {
 	const supabase = getSupabaseAdmin()
 	const { q, limit = 25, offset = 0 } = params
