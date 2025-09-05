@@ -70,7 +70,7 @@ export function UsersList({ initialUsers, q, hasMore: initialHasMore }: UsersLis
 				<table className="whoop-table">
 					<thead>
 						<tr>
-							<th>User</th>
+							<th className="max-w-[200px] sm:max-w-none">User</th>
 							<th>Telegram ID</th>
 							<th>Language</th>
 							<th>Currency</th>
@@ -90,17 +90,17 @@ export function UsersList({ initialUsers, q, hasMore: initialHasMore }: UsersLis
 						) : (
 							users.map(user => (
 								<tr key={user.id}>
-									<td>
-										<div className="flex items-center gap-3">
-											<div className="w-10 h-10 rounded-full bg-[rgb(var(--card-elevated))] flex items-center justify-center">
+									<td className="max-w-[200px] sm:max-w-none">
+										<div className="flex items-center gap-3 min-w-0">
+											<div className="w-10 h-10 rounded-full bg-[rgb(var(--card-elevated))] flex items-center justify-center flex-shrink-0">
 												<User className="w-5 h-5 text-[rgb(var(--muted-foreground))]" />
 											</div>
-											<div>
-												<p className="font-medium">
+											<div className="min-w-0 flex-1">
+												<p className="font-medium truncate">
 													{[user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'User #' + user.id}
 												</p>
 												{user.username && (
-													<p className="text-sm text-[rgb(var(--muted-foreground))]">
+													<p className="text-sm text-[rgb(var(--muted-foreground))] truncate">
 														@{user.username}
 													</p>
 												)}

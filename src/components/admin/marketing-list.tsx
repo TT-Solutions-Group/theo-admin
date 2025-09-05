@@ -63,10 +63,10 @@ function getUserName(event: MarketingEvent) {
 }
 
 function getStatusBadge(status: string | null) {
-	if (!status) return <Badge variant="default">pending</Badge>
-	if (status === 'success') return <Badge variant="green">success</Badge>
-	if (status === 'failed') return <Badge variant="red">failed</Badge>
-	return <Badge variant="default">{status}</Badge>
+    if (!status) return <Badge variant="default">pending</Badge>
+    if (status === 'success' || status === 'sent') return <Badge variant="green">{status}</Badge>
+    if (status === 'failed' || status === 'error') return <Badge variant="red">{status}</Badge>
+    return <Badge variant="default">{status}</Badge>
 }
 
 export function MarketingList({ initialEvents, groupBy, hasMore: initialHasMore }: MarketingListProps) {

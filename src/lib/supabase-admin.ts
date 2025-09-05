@@ -344,17 +344,18 @@ export async function getMarketingStats() {
 	const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
 	const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay())).toISOString()
 	
-	const [totalRes, monthRes, weekRes, successRes, failedRes] = await Promise.all([
-		supabase.from('marketing_events').select('id', { count: 'exact', head: true }),
-		supabase.from('marketing_events').select('id', { count: 'exact', head: true })
-			.gte('created_at', startOfMonth),
-		supabase.from('marketing_events').select('id', { count: 'exact', head: true })
-			.gte('created_at', startOfWeek),
-		supabase.from('marketing_events').select('id', { count: 'exact', head: true })
-			.eq('status', 'success'),
-		supabase.from('marketing_events').select('id', { count: 'exact', head: true })
-			.eq('status', 'failed'),
-	])
+  const [totalRes, monthRes, weekRes, successRes, failedRes] = await Promise.all([
+    supabase.from('marketing_events').select('id', { count: 'exact', head: true }),
+    supabase.from('marketing_events').select('id', { count: 'exact', head: true })
+      .gte('created_at', startOfMonth),
+    supabase.from('marketing_events').select('id', { count: 'exact', head: true })
+      .gte('created_at', startOfWeek),
+    // Treat 'sent' as success and 'error' as failed
+    supabase.from('marketing_events').select('id', { count: 'exact', head: true })
+      .in('status', ['success','sent']),
+    supabase.from('marketing_events').select('id', { count: 'exact', head: true })
+      .in('status', ['failed','error']),
+  ])
 	
 	// Get event type breakdown
 	const { data: eventTypes } = await supabase

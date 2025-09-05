@@ -2,3 +2,7 @@
 [debug] [2025-08-30T13:44:06.446Z] > authorizing via signed-in user (isfun.dev@gmail.com)
 [debug] [2025-08-30T13:44:06.447Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
 [debug] [2025-08-30T13:44:06.447Z] > authorizing via signed-in user (isfun.dev@gmail.com)
+[debug] [2025-09-04T13:17:01.564Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-09-04T13:17:01.565Z] > authorizing via signed-in user (isfun.dev@gmail.com)
+[debug] [2025-09-04T13:17:01.565Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-09-04T13:17:01.565Z] > authorizing via signed-in user (isfun.dev@gmail.com)
