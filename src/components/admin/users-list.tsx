@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { User, Crown, Calendar, ExternalLink, Check, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Calendar, Check, Crown, ExternalLink, User, X } from 'lucide-react'
+import Link from 'next/link'
+import { useState } from 'react'
 
 interface AdminUser {
 	id: number
 	telegram_id: string | null
 	username: string | null
+	display_name: string | null
 	first_name: string | null
 	last_name: string | null
 	language: string | null
@@ -97,7 +98,7 @@ export function UsersList({ initialUsers, q, hasMore: initialHasMore }: UsersLis
 											</div>
 											<div className="min-w-0 flex-1">
 												<p className="font-medium truncate">
-													{[user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'User #' + user.id}
+													{[user.display_name].filter(Boolean).join(' ') || user.username || 'User #' + user.id}
 												</p>
 												{user.username && (
 													<p className="text-sm text-[rgb(var(--muted-foreground))] truncate">

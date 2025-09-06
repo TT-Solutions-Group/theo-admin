@@ -28,6 +28,7 @@ export type AdminUser = {
 	id: number
 	telegram_id: number
 	username: string | null
+	display_name: string | null
 	first_name: string | null
 	last_name: string | null
 	language: string | null
@@ -100,12 +101,12 @@ export async function listUsers(params: { q?: string; limit?: number; offset?: n
 
 	let query = supabase
 		.from('users')
-		.select('id, telegram_id, username, first_name, last_name, language, default_currency, is_premium, terms_accepted_at, created_at')
+		.select('id, telegram_id, username, first_name, last_name, display_name, language, default_currency, is_premium, terms_accepted_at, created_at')
 		.order('created_at', { ascending: false })
 		.range(offset, offset + limit - 1)
 
 	if (q && q.trim().length > 0) {
-		query = query.or(`username.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
+		query = query.or(`username.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,display_name.ilike.%${q}%`)
 	}
 
 	const { data, error } = await query
@@ -121,7 +122,7 @@ export async function getUserById(id: number) {
 	const supabase = getSupabaseAdmin()
 	const { data, error } = await supabase
 		.from('users')
-		.select('id, telegram_id, username, first_name, last_name, language, default_currency, is_premium, terms_accepted_at, created_at')
+		.select('id, telegram_id, username, first_name, last_name, display_name, language, default_currency, is_premium, terms_accepted_at, created_at')
 		.eq('id', id)
 		.single()
 	if (error) throw error
@@ -252,7 +253,7 @@ export async function listUserCategories(params: { limit?: number; offset?: numb
 	if (userIds.length > 0) {
 		const { data: users, error: usersErr } = await supabase
 			.from('users')
-			.select('id, username, first_name, last_name, display_name')
+			.select('id, username, first_name, last_name, display_name, language')
 			.in('id', userIds)
 		if (!usersErr && users) {
 			usersById = Object.fromEntries(users.map(u => [u.id as number, u]))
