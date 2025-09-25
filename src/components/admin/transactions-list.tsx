@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react'
 
 interface Transaction {
@@ -77,10 +76,20 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 	const [transactions, setTransactions] = useState(initialTransactions)
 	const [loading, setLoading] = useState(false)
 	const [hasMore, setHasMore] = useState(initialHasMore)
-	const [offset, setOffset] = useState(100)
+	const [offset, setOffset] = useState(initialTransactions.length)
 	const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+	const sentinelRef = useRef<HTMLDivElement | null>(null)
+	const observerRef = useRef<IntersectionObserver | null>(null)
 
-	async function loadMore() {
+	useEffect(() => {
+		setTransactions(initialTransactions)
+		setHasMore(initialHasMore)
+		setOffset(initialTransactions.length)
+		setExpandedGroups(new Set())
+	}, [initialTransactions, initialHasMore])
+
+	const loadMore = useCallback(async () => {
+		if (loading || !hasMore) return
 		setLoading(true)
 		try {
 			const params = new URLSearchParams({ 
@@ -92,8 +101,12 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 			const data = await res.json()
 			
 			if (data.ok) {
-				setTransactions([...transactions, ...data.transactions])
-				setOffset(offset + 100)
+				setTransactions(prev => {
+					const seen = new Set(prev.map(t => t.id))
+					const deduped = (data.transactions as Transaction[]).filter(t => !seen.has(t.id))
+					return deduped.length ? [...prev, ...deduped] : prev
+				})
+				setOffset(prev => prev + 100)
 				setHasMore(data.hasMore)
 			}
 		} catch (error) {
@@ -101,7 +114,37 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 		} finally {
 			setLoading(false)
 		}
-	}
+	}, [offset, hasMore, loading])
+
+	useEffect(() => {
+		if (!hasMore) {
+			observerRef.current?.disconnect()
+			return
+		}
+		const node = sentinelRef.current
+		if (!node) return
+
+		if (observerRef.current) {
+			observerRef.current.disconnect()
+		}
+
+		observerRef.current = new IntersectionObserver((entries) => {
+			const entry = entries[0]
+			if (entry?.isIntersecting) {
+				loadMore()
+			}
+		}, {
+			root: null,
+			rootMargin: '200px',
+			threshold: 0.1
+		})
+
+		observerRef.current.observe(node)
+
+		return () => {
+			observerRef.current?.disconnect()
+		}
+	}, [loadMore, hasMore])
 
 	function toggleGroup(groupKey: string) {
 		const newExpanded = new Set(expandedGroups)
@@ -165,6 +208,8 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 								.reduce((sum, t) => sum + t.amount, 0)
 							const expense = groupTransactions.filter(t => t.type === 'expense')
 								.reduce((sum, t) => sum + t.amount, 0)
+							const currency = groupTransactions[0]?.currency || 'UZS'
+							const netPrefix = totalAmount >= 0 ? '+' : '-'
 							
 							return (
 								<div key={groupKey} className="border border-[rgb(var(--border))] rounded-lg">
@@ -183,17 +228,17 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 										</div>
 										<div className="flex items-center gap-4">
 											<div className="text-right">
-												<div className="flex items-center gap-2 text-green-500">
-													<TrendingUp className="w-4 h-4" />
-													<span className="font-medium">+{formatAmount(income, 'UZS')}</span>
-												</div>
-												<div className="flex items-center gap-2 text-red-500">
-													<TrendingDown className="w-4 h-4" />
-													<span className="font-medium">-{formatAmount(expense, 'UZS')}</span>
-												</div>
+											<div className="flex items-center gap-2 text-green-500">
+												<TrendingUp className="w-4 h-4" />
+												<span className="font-medium">+{formatAmount(income, currency)}</span>
+											</div>
+											<div className="flex items-center gap-2 text-red-500">
+												<TrendingDown className="w-4 h-4" />
+												<span className="font-medium">-{formatAmount(expense, currency)}</span>
+											</div>
 											</div>
 											<div className={`text-lg font-bold ${totalAmount >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-												{formatAmount(Math.abs(totalAmount), 'UZS')}
+												{netPrefix}{formatAmount(Math.abs(totalAmount), currency)}
 											</div>
 										</div>
 									</button>
@@ -280,20 +325,17 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 						</tbody>
 					</table>
 				)}
-			</div>
-			
-			{hasMore && (
-				<div className="p-4 flex justify-center">
-					<Button
-						onClick={loadMore}
-						disabled={loading}
-						variant="secondary"
-						size="lg"
-					>
-						{loading ? 'Loading...' : 'Load More Transactions'}
-					</Button>
+		</div>
+		<div ref={sentinelRef} className="flex justify-center py-4">
+			{loading && (
+				<div className="flex items-center gap-2 text-sm text-[rgb(var(--muted-foreground))]">
+					<span className="relative inline-flex">
+						<span className="animate-spin h-4 w-4 rounded-full border-2 border-current border-t-transparent" />
+					</span>
+					Loading more transactions...
 				</div>
 			)}
-		</>
+		</div>
+	</>
 	)
 }
