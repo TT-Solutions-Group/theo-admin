@@ -177,14 +177,18 @@ export async function getTransactionStats() {
 		supabase.from('transactions').select('id', { count: 'exact', head: true }),
 		supabase.from('transactions').select('id', { count: 'exact', head: true })
 			.gte('date', startOfMonth),
-		supabase.from('transactions').select('amount')
+		supabase
+			.from('transactions')
+			.select('total:amount.sum()')
 			.eq('type', 'income'),
-		supabase.from('transactions').select('amount')
+		supabase
+			.from('transactions')
+			.select('total:amount.sum()')
 			.eq('type', 'expense'),
 	])
-	
-	const totalIncome = incomeRes.data?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0
-	const totalExpense = expenseRes.data?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+
+	const totalIncome = Number(incomeRes.data?.[0]?.total ?? 0)
+	const totalExpense = Number(expenseRes.data?.[0]?.total ?? 0)
 	
 	return {
 		total: totalRes.count ?? 0,
