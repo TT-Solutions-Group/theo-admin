@@ -10,8 +10,10 @@ export async function GET(request: NextRequest) {
 		const searchParams = request.nextUrl.searchParams
 		const offset = parseInt(searchParams.get('offset') || '0')
 		const limit = parseInt(searchParams.get('limit') || '100')
+		const startDate = searchParams.get('startDate') ?? undefined
+		const endDate = searchParams.get('endDate') ?? undefined
 		
-		const transactions = await listTransactions({ limit, offset })
+		const transactions = await listTransactions({ limit, offset, startDate, endDate })
 		const hasMore = transactions.length === limit
 		
 		return NextResponse.json({ ok: true, transactions, hasMore })

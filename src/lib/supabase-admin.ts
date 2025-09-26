@@ -1,5 +1,19 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
+function toStartOfDayISO(date: string | null | undefined) {
+	if (!date) return null
+	const [year, month, day] = date.split('-').map(Number)
+	if (!year || !month || !day) return null
+	return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)).toISOString()
+}
+
+function toEndOfDayISO(date: string | null | undefined) {
+	if (!date) return null
+	const [year, month, day] = date.split('-').map(Number)
+	if (!year || !month || !day) return null
+	return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999)).toISOString()
+}
+
 let cachedAdminClient: SupabaseClient | null = null
 
 export function getSupabaseAdmin(): SupabaseClient {
@@ -167,23 +181,25 @@ export async function listPayments(params: { limit?: number; offset?: number }) 
 
 // Additional list helpers for other tables
 
-export async function getTransactionStats() {
+export async function getTransactionStats(params: { startDate?: string; endDate?: string } = {}) {
 	const supabase = getSupabaseAdmin()
-	
-	const today = new Date()
-	const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
-	
+	const isoStart = toStartOfDayISO(params.startDate)
+	const isoEnd = toEndOfDayISO(params.endDate)
+
 	// Supabase caps select responses at 1000 rows; page through everything so totals stay accurate.
 	const sumByType = async (type: 'income' | 'expense') => {
 		const pageSize = 1000
 		let offset = 0
 		let total = 0
 		while (true) {
-			const { data, error } = await supabase
+			let query = supabase
 				.from('transactions')
 				.select('amount')
 				.eq('type', type)
 				.range(offset, offset + pageSize - 1)
+			if (isoStart) query = query.gte('date', isoStart)
+			if (isoEnd) query = query.lte('date', isoEnd)
+			const { data, error } = await query
 			if (error) throw error
 			const rows = data ?? []
 			total += rows.reduce((sum, row) => sum + (row.amount ?? 0), 0)
@@ -193,36 +209,41 @@ export async function getTransactionStats() {
 		return total
 	}
 
-	const [totalRes, monthRes, totalIncome, totalExpense] = await Promise.all([
-		supabase.from('transactions').select('id', { count: 'exact', head: true }),
-		supabase.from('transactions').select('id', { count: 'exact', head: true })
-			.gte('date', startOfMonth),
+	let totalQuery = supabase.from('transactions').select('id', { count: 'exact', head: true })
+	if (isoStart) totalQuery = totalQuery.gte('date', isoStart)
+	if (isoEnd) totalQuery = totalQuery.lte('date', isoEnd)
+
+	const [totalRes, totalIncome, totalExpense] = await Promise.all([
+		totalQuery,
 		sumByType('income'),
 		sumByType('expense'),
 	])
-	
+
 	return {
-		total: totalRes.count ?? 0,
-		thisMonth: monthRes.count ?? 0,
+		count: totalRes.count ?? 0,
 		totalIncome,
 		totalExpense,
 		netAmount: totalIncome - totalExpense
 	}
 }
 
-export async function listTransactions(params: { limit?: number; offset?: number; userId?: number; categoryId?: number; type?: string }) {
+export async function listTransactions(params: { limit?: number; offset?: number; userId?: number; categoryId?: number; type?: string; startDate?: string; endDate?: string }) {
 	const supabase = getSupabaseAdmin()
-	const { limit = 50, offset = 0, userId, categoryId, type } = params
+	const { limit = 50, offset = 0, userId, categoryId, type, startDate, endDate } = params
+	const isoStart = toStartOfDayISO(startDate)
+	const isoEnd = toEndOfDayISO(endDate)
 	
 	let query = supabase
 		.from('transactions')
 		.select('id, user_id, category_id, amount, type, currency, date, created_at, source, title, description, voice_log_id, user:users!transactions_user_id_fkey(id, username, first_name, last_name, display_name), category:categories!transactions_category_id_fkey(id, name)')
 		.order('date', { ascending: false })
 		.range(offset, offset + limit - 1)
-	
+
 	if (userId) query = query.eq('user_id', userId)
 	if (categoryId) query = query.eq('category_id', categoryId)
 	if (type) query = query.eq('type', type)
+	if (isoStart) query = query.gte('date', isoStart)
+	if (isoEnd) query = query.lte('date', isoEnd)
 	
 	const { data, error } = await query
 	if (error) throw error

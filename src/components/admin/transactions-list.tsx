@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 
 interface Transaction {
 	id: string | number
@@ -80,6 +81,8 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 	const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 	const sentinelRef = useRef<HTMLDivElement | null>(null)
 	const observerRef = useRef<IntersectionObserver | null>(null)
+	const searchParams = useSearchParams()
+	const searchParamsString = useMemo(() => searchParams?.toString() ?? '', [searchParams])
 
 	useEffect(() => {
 		setTransactions(initialTransactions)
@@ -92,10 +95,9 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 		if (loading || !hasMore) return
 		setLoading(true)
 		try {
-			const params = new URLSearchParams({ 
-				offset: offset.toString(),
-				limit: '100'
-			})
+			const params = new URLSearchParams(searchParamsString)
+			params.set('offset', offset.toString())
+			params.set('limit', '100')
 			
 			const res = await fetch(`/api/admin/transactions/more?${params}`)
 			const data = await res.json()
@@ -114,7 +116,7 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 		} finally {
 			setLoading(false)
 		}
-	}, [offset, hasMore, loading])
+	}, [offset, hasMore, loading, searchParamsString])
 
 	useEffect(() => {
 		if (!hasMore) {
