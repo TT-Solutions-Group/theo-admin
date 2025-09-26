@@ -173,22 +173,33 @@ export async function getTransactionStats() {
 	const today = new Date()
 	const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
 	
-	const [totalRes, monthRes, incomeRes, expenseRes] = await Promise.all([
+	// Supabase caps select responses at 1000 rows; page through everything so totals stay accurate.
+	const sumByType = async (type: 'income' | 'expense') => {
+		const pageSize = 1000
+		let offset = 0
+		let total = 0
+		while (true) {
+			const { data, error } = await supabase
+				.from('transactions')
+				.select('amount')
+				.eq('type', type)
+				.range(offset, offset + pageSize - 1)
+			if (error) throw error
+			const rows = data ?? []
+			total += rows.reduce((sum, row) => sum + (row.amount ?? 0), 0)
+			if (rows.length < pageSize) break
+			offset += pageSize
+		}
+		return total
+	}
+
+	const [totalRes, monthRes, totalIncome, totalExpense] = await Promise.all([
 		supabase.from('transactions').select('id', { count: 'exact', head: true }),
 		supabase.from('transactions').select('id', { count: 'exact', head: true })
 			.gte('date', startOfMonth),
-		supabase
-			.from('transactions')
-			.select('total:amount.sum()')
-			.eq('type', 'income'),
-		supabase
-			.from('transactions')
-			.select('total:amount.sum()')
-			.eq('type', 'expense'),
+		sumByType('income'),
+		sumByType('expense'),
 	])
-
-	const totalIncome = Number(incomeRes.data?.[0]?.total ?? 0)
-	const totalExpense = Number(expenseRes.data?.[0]?.total ?? 0)
 	
 	return {
 		total: totalRes.count ?? 0,
