@@ -32,6 +32,7 @@ const navItems = [
   { href: '/admin/subscriptions', label: 'Subscriptions', icon: Repeat },
   { href: '/admin/marketing', label: 'Marketing', icon: Megaphone },
   { href: '/admin/budgets', label: 'Limits', icon: Wallet },
+  { href: '/admin/notifications', label: 'Notifications', icon: Megaphone },
 ]
 
 export function Sidebar() {
