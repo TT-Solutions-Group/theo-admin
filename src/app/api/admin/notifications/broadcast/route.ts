@@ -1,10 +1,16 @@
 import { requireAdmin } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 
+function joinUrl(base: string, path: string) {
+  const b = base.replace(/\/+$/g, '')
+  const p = ('/' + (path || '')).replace(/\/+/, '/')
+  return b + p
+}
+
 async function postBot(path: string, body: any, baseUrl?: string) {
-  const url = baseUrl || process.env.BOT_SERVER_URL || 'http://localhost:8002'
+  const url = joinUrl(baseUrl || process.env.BOT_SERVER_URL || 'http://localhost:8002', path)
   const key = process.env.API_INTERNAL_KEY
-  const res = await fetch(`${url}${path}`, {
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest) {
     const key = process.env.API_INTERNAL_KEY || ''
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData()
-      const botUrl = `${baseUrl}/api/notifications/broadcast`
+      const botUrl = joinUrl(baseUrl, '/api/notifications/broadcast')
       // Forward original form-data directly to the bot; don't rebuild
       const res = await fetch(botUrl, { method: 'POST', headers: { 'X-Api-Key': key }, body: form as any })
       const data = await res.json().catch(() => ({}))
