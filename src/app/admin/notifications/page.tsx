@@ -1,6 +1,6 @@
 "use client"
 import { useRouter } from 'next/navigation'
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export default function NotificationsBroadcastPage() {
   const router = useRouter()
@@ -16,6 +16,108 @@ export default function NotificationsBroadcastPage() {
   const [buttons, setButtons] = useState<Array<{ id: string; text: string; url: string; web_app: boolean }>>([])
   const [buttonsPerRow, setButtonsPerRow] = useState<number>(2)
   const idCounterRef = useRef(0)
+
+  // Segmentation state
+  type FieldMeta = { group: string; field: string; label: string; type: 'string' | 'number' | 'timestamp' | 'boolean' }
+  type Operator = 'eq' | 'neq' | 'in' | 'not_in' | 'gt' | 'gte' | 'lt' | 'lte' | 'between' | 'before' | 'after' | 'within_days' | 'is_null' | 'not_null'
+  type Filter = { field: string; op: Operator; value?: any }
+  const [fields, setFields] = useState<FieldMeta[]>([])
+  const [operatorsByType, setOperatorsByType] = useState<Record<string, Operator[]>>({})
+  const [optionsByField, setOptionsByField] = useState<Record<string, Array<{ value: any; label: string }>>>({})
+  const [filters, setFilters] = useState<Filter[]>([])
+  const [preview, setPreview] = useState<{ count: number; sample: Array<{ id: number; username: string | null; display_name: string | null; language: string | null }> } | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/admin/notifications/filters')
+      .then(r => r.json())
+      .then(d => {
+        if (d?.ok) {
+          setFields(d.fields || [])
+          setOperatorsByType(d.operators || {})
+          setOptionsByField(d.options || {})
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const groupedFields = useMemo(() => {
+    const groups: Record<string, FieldMeta[]> = {}
+    for (const f of fields) {
+      groups[f.group] = groups[f.group] || []
+      groups[f.group].push(f)
+    }
+    return groups
+  }, [fields])
+
+  // Human-friendly operator labels and ordering by type
+  const OP_LABELS: Record<Operator, string> = {
+    eq: 'is',
+    neq: 'is not',
+    in: 'is any of',
+    not_in: 'is none of',
+    gt: 'greater than',
+    gte: 'greater or equal',
+    lt: 'less than',
+    lte: 'less or equal',
+    between: 'between',
+    before: 'before',
+    after: 'after',
+    within_days: 'in the last N days',
+    is_null: 'is empty',
+    not_null: 'is set',
+  }
+
+  function operatorOptionsFor(type: FieldMeta['type']): { value: Operator; label: string }[] {
+    const ops = operatorsByType[type] || []
+    const orderByType: Operator[] = type === 'timestamp'
+      ? ['within_days','between','after','before','not_null','is_null']
+      : type === 'boolean'
+        ? ['eq','neq']
+        : ['eq','neq','in','not_in','between','gt','gte','lt','lte','not_null','is_null']
+    const ordered = orderByType.filter(o => ops.includes(o))
+    // Append any missing ones at the end
+    ops.forEach(o => { if (!ordered.includes(o)) ordered.push(o) })
+    return ordered.map(o => ({ value: o, label: OP_LABELS[o] || o }))
+  }
+
+  // Timestamp helpers to convert between input and ISO
+  function toInputDateTimeLocal(iso?: string | null): string {
+    if (!iso) return ''
+    try {
+      const d = new Date(iso)
+      if (isNaN(d.getTime())) return ''
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const yyyy = d.getFullYear()
+      const mm = pad(d.getMonth() + 1)
+      const dd = pad(d.getDate())
+      const hh = pad(d.getHours())
+      const mi = pad(d.getMinutes())
+      return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+    } catch { return '' }
+  }
+
+  function fromInputDateTimeLocal(val?: string | null): string | null {
+    if (!val) return null
+    try {
+      const d = new Date(val)
+      if (isNaN(d.getTime())) return null
+      return d.toISOString()
+    } catch { return null }
+  }
+
+  async function runPreview() {
+    setPreviewLoading(true)
+    try {
+      const res = await fetch('/api/admin/notifications/preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filters })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (data?.ok) setPreview({ count: data.count || 0, sample: data.sample || [] })
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
 
   function genId() {
     idCounterRef.current += 1
@@ -122,6 +224,7 @@ export default function NotificationsBroadcastPage() {
               .map(b => ({ text: b.text?.trim(), url: sanitizeUrl(b.url || ''), web_app: !!b.web_app }))
               .filter(b => b.text && b.url),
             buttons_per_row: buttonsPerRow,
+            filters,
           }),
         })
       } else {
@@ -140,6 +243,7 @@ export default function NotificationsBroadcastPage() {
             fd.append('buttons_per_row', String(buttonsPerRow))
           }
         }
+        if (filters && filters.length > 0) fd.append('filters', JSON.stringify(filters))
         res = await fetch('/api/admin/notifications/broadcast', { method: 'POST', body: fd })
       }
       const data = await res.json().catch(() => ({}))
@@ -156,6 +260,211 @@ export default function NotificationsBroadcastPage() {
       <h1 className="text-2xl font-semibold mb-4">Broadcast Notifications</h1>
       <p className="text-sm text-gray-500 mb-6">Sends a bot message with formatting and optional media to allowlisted users (PROD_NOTIFICATIONS_IDS) only.</p>
       <div className="grid grid-cols-1 gap-4 max-w-3xl">
+        {/* Segmentation */}
+        <div className="grid gap-3 border border-[rgb(var(--border))] rounded">
+          <div className="px-3 py-2 flex items-center justify-between border-b border-[rgb(var(--border))]">
+            <span className="text-sm font-medium">Audience filters</span>
+            <div className="flex items-center gap-2">
+              <button type="button" className="px-2 py-1 text-xs border rounded" onClick={() => setFilters(prev => [...prev, { field: fields[0]?.field || 'users.language', op: 'in', value: [] }])}>+ Add filter</button>
+              <div className="relative group">
+                <button type="button" className="px-2 py-1 text-xs border rounded">Presets</button>
+                <div className="absolute right-0 mt-1 hidden group-hover:block z-10 bg-[rgb(var(--card))] border border-[rgb(var(--border))] rounded shadow-min w-56">
+                  <button type="button" className="w-full text-left px-3 py-2 text-xs hover:bg-[rgb(var(--card-hover))]" onClick={() => setFilters([
+                    { field: 'user_subscriptions.status', op: 'eq', value: 'active' },
+                    { field: 'marketing_events.event_time', op: 'within_days', value: 7 },
+                  ])}>Active subs in last 7 days</button>
+                  <button type="button" className="w-full text-left px-3 py-2 text-xs hover:bg-[rgb(var(--card-hover))]" onClick={() => setFilters([
+                    { field: 'users.language', op: 'in', value: ['uz','ru'] },
+                    { field: 'transactions.date', op: 'within_days', value: 14 },
+                  ])}>UZ/RU users with tx in 14 days</button>
+                  <button type="button" className="w-full text-left px-3 py-2 text-xs hover:bg-[rgb(var(--card-hover))]" onClick={() => setFilters([
+                    { field: 'users.is_premium', op: 'eq', value: false },
+                    { field: 'marketing_events.event_name', op: 'eq', value: 'InitiateCheckout' },
+                    { field: 'marketing_events.event_time', op: 'within_days', value: 30 },
+                  ])}>Checkout started but not premium (30d)</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          {filters.length === 0 && <span className="text-xs text-gray-500 px-3 py-2">No filters. The bot will use its allowlist defaults.</span>}
+          <div className="px-3 py-2 grid gap-2">
+          {filters.map((f, idx) => {
+            const meta = fields.find(m => m.field === f.field)
+            const ops = meta ? (operatorsByType[meta.type] || []) : []
+            return (
+              <div key={`flt-${idx}`} className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-4">
+                  <select className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]"
+                    value={f.field}
+                    onChange={e => {
+                      const nf = fields.find(m => m.field === e.target.value)
+                      setFilters(prev => prev.map((it, i) => i === idx ? { field: e.target.value, op: (nf ? (operatorsByType[nf.type] || ['eq'])[0] : 'eq'), value: undefined } : it))
+                    }}>
+                    {Object.entries(groupedFields).map(([g, arr]) => (
+                      <optgroup key={g} label={g}>
+                        {arr.map(it => <option key={it.field} value={it.field}>{it.label}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-3">
+                  <select className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]"
+                    value={f.op}
+                    onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, op: e.target.value as Operator, value: undefined } : it))}>
+                    {operatorOptionsFor(meta?.type || 'string').map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-4">
+                  {/* Value editor with select options if available */}
+                  {(() => {
+                    const m = meta
+                    const op = f.op
+                    if (!m) return null
+                    if (op === 'is_null' || op === 'not_null') return <span className="text-xs text-gray-500">—</span>
+                    const opts = optionsByField[f.field]
+                    // Render multi-select for in/not_in if options provided
+                    if ((op === 'in' || op === 'not_in') && Array.isArray(opts) && opts.length > 0) {
+                      const selected = Array.isArray(f.value) ? f.value : []
+                      return (
+                        <select multiple className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))] h-24"
+                          value={selected.map(String)}
+                          onChange={e => {
+                            const arr = Array.from(e.target.selectedOptions).map(o => o.value)
+                            const casted = (m.type === 'number') ? arr.map(v => Number(v)) : arr
+                            setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: casted } : it))
+                          }}>
+                          {opts.map(o => <option key={String(o.value)} value={String(o.value)}>{o.label}</option>)}
+                        </select>
+                      )
+                    }
+                    // Render single select for eq/neq when options provided
+                    if ((op === 'eq' || op === 'neq') && Array.isArray(opts) && opts.length > 0) {
+                      return (
+                        <select className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]"
+                          value={f.value ?? ''}
+                          onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: (m.type === 'number') ? Number(e.target.value) : e.target.value } : it))}>
+                          <option value="">—</option>
+                          {opts.map(o => <option key={String(o.value)} value={String(o.value)}>{o.label}</option>)}
+                        </select>
+                      )
+                    }
+                    if (m.type === 'boolean') {
+                      return (
+                        <select className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]"
+                          value={String(Boolean(f.value))}
+                          onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: e.target.value === 'true' } : it))}>
+                          <option value="true">true</option>
+                          <option value="false">false</option>
+                        </select>
+                      )
+                    }
+                    if (op === 'between') {
+                      if (m.type === 'timestamp') {
+                        return (
+                          <div className="flex gap-2">
+                            <input type="datetime-local" className="flex-1 border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]"
+                              value={toInputDateTimeLocal(Array.isArray(f.value) ? f.value[0] : undefined)}
+                              onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: [fromInputDateTimeLocal(e.target.value), Array.isArray(it.value) ? it.value?.[1] : null] } : it))} />
+                            <input type="datetime-local" className="flex-1 border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]"
+                              value={toInputDateTimeLocal(Array.isArray(f.value) ? f.value[1] : undefined)}
+                              onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: [Array.isArray(it.value) ? it.value?.[0] : null, fromInputDateTimeLocal(e.target.value)] } : it))} />
+                          </div>
+                        )
+                      }
+                      return (
+                        <div className="flex gap-2">
+                          <input className="flex-1 border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" placeholder={'from'} value={Array.isArray(f.value) ? f.value[0] ?? '' : ''}
+                            onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: [e.target.value, Array.isArray(it.value) ? it.value?.[1] : ''] } : it))} />
+                          <input className="flex-1 border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" placeholder={'to'} value={Array.isArray(f.value) ? f.value[1] ?? '' : ''}
+                            onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: [Array.isArray(it.value) ? it.value?.[0] : '', e.target.value] } : it))} />
+                        </div>
+                      )
+                    }
+                    if (op === 'in' || op === 'not_in') {
+                      return (
+                        <input className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" placeholder="comma,separated"
+                          value={Array.isArray(f.value) ? f.value.join(',') : ''}
+                          onChange={e => {
+                            const arr = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                            setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: (m.type === 'number') ? arr.map(x => Number(x)) : arr } : it))
+                          }} />
+                      )
+                    }
+                    if (m.type === 'timestamp' && (op === 'before' || op === 'after')) {
+                      return (
+                        <input type="datetime-local" className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]"
+                          value={toInputDateTimeLocal(f.value)}
+                          onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: fromInputDateTimeLocal(e.target.value) } : it))} />
+                      )
+                    }
+                    if (m.type === 'timestamp' && op === 'within_days') {
+                      return (
+                        <input className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" placeholder="days"
+                          value={f.value ?? ''}
+                          onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: Number(e.target.value || '0') } : it))} />
+                      )
+                    }
+                    if (m.type === 'number' && (op === 'gt' || op === 'gte' || op === 'lt' || op === 'lte' || op === 'eq' || op === 'neq')) {
+                      return (
+                        <input type="number" className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" placeholder="value"
+                          value={f.value ?? ''}
+                          onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: (e.target.value === '' ? '' : Number(e.target.value)) } : it))} />
+                      )
+                    }
+                    return (
+                      <input className="w-full border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" placeholder="value"
+                        value={f.value ?? ''}
+                        onChange={e => setFilters(prev => prev.map((it, i) => i === idx ? { ...it, value: e.target.value } : it))} />
+                    )
+                  })()}
+                </div>
+                <div className="col-span-1 text-right">
+                  <button type="button" className="px-2 py-1 text-xs border rounded" onClick={() => setFilters(prev => prev.filter((_, i) => i !== idx))}>Remove</button>
+                </div>
+              </div>
+            )})}
+          </div>
+          {/* Compact badges summary */}
+          {filters.length > 0 && (
+            <div className="px-3 py-2 border-t border-[rgb(var(--border))] flex flex-wrap gap-2">
+              {filters.map((f, i) => {
+                const meta = fields.find(m => m.field === f.field)
+                const label = meta?.label || f.field
+                const opLabel = OP_LABELS[f.op] || f.op
+                let val: string = ''
+                if (Array.isArray(f.value)) val = f.value.join(', ')
+                else if (typeof f.value === 'boolean') val = f.value ? 'true' : 'false'
+                else if (typeof f.value === 'string') val = f.value
+                else if (f.value == null) val = ''
+                else val = String(f.value)
+                return (
+                  <span key={`badge-${i}`} className="text-[10px] px-2 py-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--foreground))]">
+                    {label}: {opLabel}{val ? ` ${val}` : ''}
+                  </span>
+                )
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-2 px-3 py-2 border-t border-[rgb(var(--border))]">
+            <button type="button" className="px-3 py-1 rounded border border-[rgb(var(--border))]" onClick={runPreview} disabled={previewLoading}>{previewLoading ? 'Previewing…' : 'Preview audience'}</button>
+            {preview && <span className="text-xs text-gray-500">Matched: {preview.count}</span>}
+          </div>
+          {preview?.sample?.length ? (
+            <div className="mx-3 mb-3 border border-[rgb(var(--border))] rounded p-2">
+              <div className="text-xs text-gray-500 mb-1">Sample users</div>
+              <div className="text-xs grid gap-1">
+                {preview.sample.map(u => (
+                  <div key={`s-${u.id}`} className="flex gap-2">
+                    <span className="w-16">#{u.id}</span>
+                    <span className="w-40">{u.username || '-'}</span>
+                    <span className="flex-1">{u.display_name || '-'}</span>
+                    <span className="w-10">{u.language || '-'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <span className="text-sm">Message (rich text)</span>
