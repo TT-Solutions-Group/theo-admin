@@ -22,6 +22,8 @@ export type SegmentFilter = {
   value?: any
 }
 
+export type SegmentLogic = 'and' | 'or'
+
 function toISODateFromDaysAgo(days: number): string {
   const d = new Date()
   d.setUTCDate(d.getUTCDate() - Math.max(0, Number(days) || 0))
@@ -77,6 +79,13 @@ function intersectSets(a: Set<number>, b: Set<number>): Set<number> {
 function differenceSets(a: Set<number>, b: Set<number>): Set<number> {
   const out = new Set<number>()
   a.forEach(v => { if (!b.has(v)) out.add(v) })
+  return out
+}
+
+function unionSets(a: Set<number>, b: Set<number>): Set<number> {
+  const out = new Set<number>()
+  a.forEach(v => out.add(v))
+  b.forEach(v => out.add(v))
   return out
 }
 
@@ -346,12 +355,12 @@ async function getUserIdsForNotificationsFilter(filter: SegmentFilter): Promise<
   return ids
 }
 
-export async function resolveFiltersToUserIds(filters: SegmentFilter[]): Promise<number[]> {
+export async function resolveFiltersToUserIds(filters: SegmentFilter[], logic: SegmentLogic = 'and'): Promise<number[]> {
   if (!filters || filters.length === 0) {
     // no filters -> default to allowlist behavior should be respected by downstream bot
     return []
   }
-  // AND all filters for now
+  // Combine by logic across filters
   let current: Set<number> | null = null
   for (const f of filters) {
     const prefix = f.field.split('.')[0]
@@ -381,14 +390,14 @@ export async function resolveFiltersToUserIds(filters: SegmentFilter[]): Promise
       }
     }
     if (current === null) current = set
-    else current = intersectSets(current, set)
+    else current = (logic === 'or') ? unionSets(current, set) : intersectSets(current, set)
     if (current.size === 0) break
   }
   return Array.from(current || [])
 }
 
-export async function previewSegment(filters: SegmentFilter[], sampleSize = 20) {
-  const userIds = await resolveFiltersToUserIds(filters)
+export async function previewSegment(filters: SegmentFilter[], sampleSize = 20, logic: SegmentLogic = 'and') {
+  const userIds = await resolveFiltersToUserIds(filters, logic)
   const supabase = getSupabaseAdmin()
   const sampleIds = userIds.slice(0, Math.max(1, Math.min(sampleSize, 50)))
   let sample: Array<{ id: number; username: string | null; display_name: string | null; language: string | null }>
