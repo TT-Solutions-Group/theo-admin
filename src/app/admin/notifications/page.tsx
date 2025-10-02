@@ -21,12 +21,14 @@ export default function NotificationsBroadcastPage() {
   type FieldMeta = { group: string; field: string; label: string; type: 'string' | 'number' | 'timestamp' | 'boolean' }
   type Operator = 'eq' | 'neq' | 'in' | 'not_in' | 'gt' | 'gte' | 'lt' | 'lte' | 'between' | 'before' | 'after' | 'within_days' | 'is_null' | 'not_null'
   type Filter = { field: string; op: Operator; value?: any }
+  type Logic = 'and' | 'or'
   const [fields, setFields] = useState<FieldMeta[]>([])
   const [operatorsByType, setOperatorsByType] = useState<Record<string, Operator[]>>({})
   const [optionsByField, setOptionsByField] = useState<Record<string, Array<{ value: any; label: string }>>>({})
   const [filters, setFilters] = useState<Filter[]>([])
   const [preview, setPreview] = useState<{ count: number; sample: Array<{ id: number; username: string | null; display_name: string | null; language: string | null }> } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [logic, setLogic] = useState<Logic>('and')
 
   useEffect(() => {
     fetch('/api/admin/notifications/filters')
@@ -110,7 +112,7 @@ export default function NotificationsBroadcastPage() {
     setPreviewLoading(true)
     try {
       const res = await fetch('/api/admin/notifications/preview', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filters })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filters, logic })
       })
       const data = await res.json().catch(() => ({}))
       if (data?.ok) setPreview({ count: data.count || 0, sample: data.sample || [] })
@@ -225,6 +227,7 @@ export default function NotificationsBroadcastPage() {
               .filter(b => b.text && b.url),
             buttons_per_row: buttonsPerRow,
             filters,
+            logic,
           }),
         })
       } else {
@@ -244,6 +247,7 @@ export default function NotificationsBroadcastPage() {
           }
         }
         if (filters && filters.length > 0) fd.append('filters', JSON.stringify(filters))
+        fd.append('logic', logic)
         res = await fetch('/api/admin/notifications/broadcast', { method: 'POST', body: fd })
       }
       const data = await res.json().catch(() => ({}))
@@ -265,6 +269,13 @@ export default function NotificationsBroadcastPage() {
           <div className="px-3 py-2 flex items-center justify-between border-b border-[rgb(var(--border))]">
             <span className="text-sm font-medium">Audience filters</span>
             <div className="flex items-center gap-2">
+                <label className="text-xs flex items-center gap-2">
+                  <span>Combine with</span>
+                  <select className="border rounded px-2 py-1 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" value={logic} onChange={e => setLogic((e.target.value === 'or' ? 'or' : 'and'))}>
+                    <option value="and">AND</option>
+                    <option value="or">OR</option>
+                  </select>
+                </label>
               <button type="button" className="px-2 py-1 text-xs border rounded" onClick={() => setFilters(prev => [...prev, { field: fields[0]?.field || 'users.language', op: 'in', value: [] }])}>+ Add filter</button>
               <div className="relative group">
                 <button type="button" className="px-2 py-1 text-xs border rounded">Presets</button>

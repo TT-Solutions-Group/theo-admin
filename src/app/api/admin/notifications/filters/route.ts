@@ -5,21 +5,32 @@ import { NextRequest, NextResponse } from 'next/server'
 
 type Option = { value: string | number | boolean; label: string }
 
-async function fetchDistinctStrings(table: string, column: string, limit = 500): Promise<string[]> {
+// Page through entire table to collect all distinct, non-null string values for a column
+async function fetchDistinctStrings(table: string, column: string): Promise<string[]> {
   const supabase = getSupabaseAdmin()
-  let { data, error } = await supabase
-    .from(table as any)
-    .select(`${column}`)
-    .not(column as any, 'is', null as any)
-    .order(column as any, { ascending: true })
-    .limit(limit)
-  if (error) return []
-  const vals = (data || []).map((r: any) => r?.[column]).filter((v: any) => typeof v === 'string' && v.trim().length > 0)
-  return Array.from(new Set(vals))
-}
-
-async function fetchDistinctEnum(table: string, column: string, limit = 100): Promise<string[]> {
-  return await fetchDistinctStrings(table, column, limit)
+  const found = new Set<string>()
+  const pageSize = 1000
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from(table as any)
+      .select(`${column}`)
+      .not(column as any, 'is', null as any)
+      .order(column as any, { ascending: true })
+      .range(from, from + pageSize - 1)
+    if (error) break
+    const rows = data || []
+    for (const r of rows) {
+      const v = (r as any)?.[column]
+      if (typeof v === 'string') {
+        const s = v.trim()
+        if (s.length > 0) found.add(s)
+      }
+    }
+    if (rows.length < pageSize) break
+    from += pageSize
+  }
+  return Array.from(found)
 }
 
 async function fetchCategories(): Promise<Option[]> {
@@ -44,9 +55,9 @@ async function fetchOptionsByField(): Promise<Record<string, Option[]>> {
     fetchDistinctStrings('transactions', 'currency'),
     fetchDistinctStrings('transactions', 'source'),
     fetchDistinctStrings('marketing_events', 'event_name'),
-    fetchDistinctEnum('marketing_events', 'action_source'),
-    fetchDistinctEnum('marketing_events', 'source'),
-    fetchDistinctEnum('usage_events', 'feature'),
+    fetchDistinctStrings('marketing_events', 'action_source'),
+    fetchDistinctStrings('marketing_events', 'source'),
+    fetchDistinctStrings('usage_events', 'feature'),
     fetchDistinctStrings('input_usage', 'period_key'),
     fetchDistinctStrings('budgets', 'currency'),
     fetchDistinctStrings('user_notifications', 'code'),

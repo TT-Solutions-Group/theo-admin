@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth'
-import { resolveFiltersToUserIds, type SegmentFilter } from '@/lib/segments'
+import { resolveFiltersToUserIds, type SegmentFilter, type SegmentLogic } from '@/lib/segments'
 import { NextRequest, NextResponse } from 'next/server'
 
 function joinUrl(base: string, path: string) {
@@ -41,7 +41,9 @@ export async function POST(request: NextRequest) {
       if (typeof filtersRaw === 'string' && filtersRaw.trim()) {
         try {
           const filters = JSON.parse(filtersRaw) as SegmentFilter[]
-          user_ids = await resolveFiltersToUserIds(filters)
+          const logicRaw = form.get('logic')
+          const logic: SegmentLogic = logicRaw === 'or' ? 'or' : 'and'
+          user_ids = await resolveFiltersToUserIds(filters, logic)
         } catch {}
       }
       const botUrl = joinUrl(baseUrl, '/api/notifications/broadcast')
@@ -56,9 +58,10 @@ export async function POST(request: NextRequest) {
     } else {
       const payload = await request.json()
       const filters = Array.isArray(payload?.filters) ? (payload.filters as SegmentFilter[]) : []
+      const logic: SegmentLogic = payload?.logic === 'or' ? 'or' : 'and'
       let user_ids: number[] | undefined
       if (filters.length > 0) {
-        user_ids = await resolveFiltersToUserIds(filters)
+        user_ids = await resolveFiltersToUserIds(filters, logic)
       }
       const body = { ...payload, ...(user_ids && user_ids.length > 0 ? { user_ids } : {}) }
       const res = await postBot('/api/notifications/broadcast', body, baseUrl)
