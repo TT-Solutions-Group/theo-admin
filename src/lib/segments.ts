@@ -91,61 +91,75 @@ function unionSets(a: Set<number>, b: Set<number>): Set<number> {
 
 async function getUserIdsForUsersFilter(filter: SegmentFilter): Promise<Set<number>> {
   const supabase = getSupabaseAdmin()
-  let query = supabase.from('users').select('id')
   const [, col] = filter.field.split('.')
   const v = filter.value
-  switch (filter.op) {
-    case 'eq': query = query.eq(col, v); break
-    case 'neq': query = query.neq(col, v); break
-    case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
-    case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
-    case 'gt': query = query.gt(col, v); break
-    case 'gte': query = query.gte(col, v); break
-    case 'lt': query = query.lt(col, v); break
-    case 'lte': query = query.lte(col, v); break
-    case 'between':
-      if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
-      break
-    case 'before': query = query.lt(col, v); break
-    case 'after': query = query.gt(col, v); break
-    case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
-    case 'is_null': query = query.is(col, null as any); break
-    case 'not_null': query = query.not(col, 'is', null as any); break
-  }
-  const { data, error } = await query
-  if (error) throw error
+  const pageSize = 1000
+  let offset = 0
   const ids = new Set<number>()
-  ;(data || []).forEach(r => { if (typeof (r as any).id === 'number') ids.add((r as any).id) })
+  while (true) {
+    let query = supabase.from('users').select('id').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+    switch (filter.op) {
+      case 'eq': query = query.eq(col, v); break
+      case 'neq': query = query.neq(col, v); break
+      case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
+      case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
+      case 'gt': query = query.gt(col, v); break
+      case 'gte': query = query.gte(col, v); break
+      case 'lt': query = query.lt(col, v); break
+      case 'lte': query = query.lte(col, v); break
+      case 'between':
+        if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
+        break
+      case 'before': query = query.lt(col, v); break
+      case 'after': query = query.gt(col, v); break
+      case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
+      case 'is_null': query = query.is(col, null as any); break
+      case 'not_null': query = query.not(col, 'is', null as any); break
+    }
+    const { data, error } = await query
+    if (error) throw error
+    const rows = data || []
+    rows.forEach(r => { if (typeof (r as any).id === 'number') ids.add((r as any).id) })
+    if (rows.length < pageSize) break
+    offset += pageSize
+  }
   return ids
 }
 
 async function getUserIdsForTransactionsFilter(filter: SegmentFilter): Promise<Set<number>> {
   const supabase = getSupabaseAdmin()
-  let query = supabase.from('transactions').select('user_id')
   const [, col] = filter.field.split('.')
   const v = filter.value
-  switch (filter.op) {
-    case 'eq': query = query.eq(col, v); break
-    case 'neq': query = query.neq(col, v); break
-    case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
-    case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
-    case 'gt': query = query.gt(col, v); break
-    case 'gte': query = query.gte(col, v); break
-    case 'lt': query = query.lt(col, v); break
-    case 'lte': query = query.lte(col, v); break
-    case 'between':
-      if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
-      break
-    case 'before': query = query.lt(col, v); break
-    case 'after': query = query.gt(col, v); break
-    case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
-    case 'is_null': query = query.is(col, null as any); break
-    case 'not_null': query = query.not(col, 'is', null as any); break
-  }
-  const { data, error } = await query
-  if (error) throw error
+  const pageSize = 1000
+  let offset = 0
   const ids = new Set<number>()
-  ;(data || []).forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+  while (true) {
+    let query = supabase.from('transactions').select('id, user_id').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+    switch (filter.op) {
+      case 'eq': query = query.eq(col, v); break
+      case 'neq': query = query.neq(col, v); break
+      case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
+      case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
+      case 'gt': query = query.gt(col, v); break
+      case 'gte': query = query.gte(col, v); break
+      case 'lt': query = query.lt(col, v); break
+      case 'lte': query = query.lte(col, v); break
+      case 'between':
+        if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
+        break
+      case 'before': query = query.lt(col, v); break
+      case 'after': query = query.gt(col, v); break
+      case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
+      case 'is_null': query = query.is(col, null as any); break
+      case 'not_null': query = query.not(col, 'is', null as any); break
+    }
+    const { data, error } = await query
+    if (error) throw error
+    const rows = data || []
+    rows.forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+    if (rows.length < pageSize) break
+    offset += pageSize
+  }
   return ids
 }
 
@@ -229,53 +243,120 @@ async function getUserIdsForTransactionsCountFilter(filter: SegmentFilter): Prom
   return ids
 }
 
-async function getUserIdsForMarketingFilter(filter: SegmentFilter): Promise<Set<number>> {
+async function getUserIdsForMiniAppOpenCountFilter(filter: SegmentFilter): Promise<Set<number>> {
   const supabase = getSupabaseAdmin()
-  let query = supabase.from('marketing_events').select('user_id, telegram_id')
-  const [, col] = filter.field.split('.')
-  const v = filter.value
-  switch (filter.op) {
-    case 'eq': query = query.eq(col, v); break
-    case 'neq': query = query.neq(col, v); break
-    case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
-    case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
-    case 'gt': query = query.gt(col, v); break
-    case 'gte': query = query.gte(col, v); break
-    case 'lt': query = query.lt(col, v); break
-    case 'lte': query = query.lte(col, v); break
-    case 'between':
-      if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
-      break
-    case 'before': query = query.lt(col, v); break
-    case 'after': query = query.gt(col, v); break
-    case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
-    case 'is_null': query = query.is(col, null as any); break
-    case 'not_null': query = query.not(col, 'is', null as any); break
+  const pageSize = 1000
+  let offset = 0
+  const countsByUserId: Record<number, number> = {}
+  const countsByTelegramId: Record<number, number> = {}
+  while (true) {
+    let query = supabase
+      .from('marketing_events')
+      .select('user_id, telegram_id, source')
+      .eq('source', 'mini_app')
+      .order('created_at', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+    const { data, error } = await query
+    if (error) throw error
+    const rows = data || []
+    rows.forEach(r => {
+      const uid = (r as any).user_id
+      const tg = (r as any).telegram_id
+      if (typeof uid === 'number') countsByUserId[uid] = (countsByUserId[uid] || 0) + 1
+      else if (typeof tg === 'number') countsByTelegramId[tg] = (countsByTelegramId[tg] || 0) + 1
+    })
+    if (rows.length < pageSize) break
+    offset += pageSize
   }
-  const { data, error } = await query
-  if (error) throw error
-  const userIds = new Set<number>()
-  const tgIds: number[] = []
-  ;(data || []).forEach(r => {
-    const uid = (r as any).user_id
-    const tg = (r as any).telegram_id
-    if (typeof uid === 'number') userIds.add(uid)
-    else if (typeof tg === 'number') tgIds.push(tg)
-  })
+
+  // Map telegram_id -> user_id to merge counts
+  const tgIds = Object.keys(countsByTelegramId).map(n => Number(n)).filter(n => Number.isFinite(n))
   if (tgIds.length > 0) {
-    const mapped = await mapTelegramIdsToUserIds(Array.from(new Set(tgIds)))
-    mapped.forEach(id => userIds.add(id))
+    const chunkSize = 1000
+    for (let i = 0; i < tgIds.length; i += chunkSize) {
+      const chunk = tgIds.slice(i, i + chunkSize)
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, telegram_id')
+        .in('telegram_id', chunk)
+      if (!error && Array.isArray(data)) {
+        data.forEach((u: any) => {
+          const tg = u?.telegram_id
+          const uid = u?.id
+          if (typeof tg === 'number' && typeof uid === 'number') {
+            countsByUserId[uid] = (countsByUserId[uid] || 0) + (countsByTelegramId[tg] || 0)
+          }
+        })
+      }
+    }
   }
-  return userIds
+
+  const toNum = (x: any) => Number(x ?? 0)
+  const v = filter.value
+  const ids = new Set<number>()
+
+  function zeroQualifies(): boolean {
+    const n = toNum(v)
+    switch (filter.op) {
+      case 'eq': return n === 0
+      case 'neq': return 0 !== n
+      case 'gt': return 0 > n
+      case 'gte': return 0 >= n
+      case 'lt': return 0 < n
+      case 'lte': return 0 <= n
+      case 'between': return Array.isArray(v) && v.length === 2 && 0 >= toNum(v[0]) && 0 <= toNum(v[1])
+      case 'in': return Array.isArray(v) ? v.map(toNum).includes(0) : 0 === n
+      case 'not_in': return Array.isArray(v) ? !v.map(toNum).includes(0) : 0 !== n
+      case 'is_null': return true
+      case 'not_null': return false
+      default: return false
+    }
+  }
+
+  for (const [uidStr, cnt] of Object.entries(countsByUserId)) {
+    const uid = Number(uidStr)
+    let ok = false
+    switch (filter.op) {
+      case 'eq': ok = cnt === toNum(v); break
+      case 'neq': ok = cnt !== toNum(v); break
+      case 'gt': ok = cnt > toNum(v); break
+      case 'gte': ok = cnt >= toNum(v); break
+      case 'lt': ok = cnt < toNum(v); break
+      case 'lte': ok = cnt <= toNum(v); break
+      case 'between':
+        ok = Array.isArray(v) && v.length === 2 && cnt >= toNum(v[0]) && cnt <= toNum(v[1])
+        break
+      case 'in':
+        ok = Array.isArray(v) ? v.map(toNum).includes(cnt) : cnt === toNum(v)
+        break
+      case 'not_in':
+        ok = Array.isArray(v) ? !v.map(toNum).includes(cnt) : cnt !== toNum(v)
+        break
+      case 'is_null': ok = false; break
+      case 'not_null': ok = cnt > 0; break
+      default: ok = false; break
+    }
+    if (ok) ids.add(uid)
+  }
+
+  if (zeroQualifies()) {
+    const all = await getAllUserIds()
+    all.forEach(uid => { if (!(uid in countsByUserId)) ids.add(uid) })
+  }
+
+  return ids
 }
 
-async function getUserIdsForUsageFilter(filter: SegmentFilter): Promise<Set<number>> {
-  // usage_events: has user_id and telegram_id; input_usage: only telegram_id
+async function getUserIdsForMarketingFilter(filter: SegmentFilter): Promise<Set<number>> {
+  const supabase = getSupabaseAdmin()
   const [, col] = filter.field.split('.')
-  if (filter.field.startsWith('usage_events.')) {
-    const supabase = getSupabaseAdmin()
-    let query = supabase.from('usage_events').select('user_id, telegram_id, created_at')
-    const v = filter.value
+  const v = filter.value
+  const pageSize = 1000
+  let offset = 0
+  const userIds = new Set<number>()
+  const tgIds: number[] = []
+  while (true) {
+    let query = supabase.from('marketing_events').select('id, user_id, telegram_id').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
     switch (filter.op) {
       case 'eq': query = query.eq(col, v); break
       case 'neq': query = query.neq(col, v); break
@@ -296,14 +377,65 @@ async function getUserIdsForUsageFilter(filter: SegmentFilter): Promise<Set<numb
     }
     const { data, error } = await query
     if (error) throw error
-    const out = new Set<number>()
-    const tgIds: number[] = []
-    ;(data || []).forEach(r => {
+    const rows = data || []
+    rows.forEach(r => {
       const uid = (r as any).user_id
       const tg = (r as any).telegram_id
-      if (typeof uid === 'number') out.add(uid)
+      if (typeof uid === 'number') userIds.add(uid)
       else if (typeof tg === 'number') tgIds.push(tg)
     })
+    if (rows.length < pageSize) break
+    offset += pageSize
+  }
+  if (tgIds.length > 0) {
+    const mapped = await mapTelegramIdsToUserIds(Array.from(new Set(tgIds)))
+    mapped.forEach(id => userIds.add(id))
+  }
+  return userIds
+}
+
+async function getUserIdsForUsageFilter(filter: SegmentFilter): Promise<Set<number>> {
+  // usage_events: has user_id and telegram_id; input_usage: only telegram_id
+  const [, col] = filter.field.split('.')
+  if (filter.field.startsWith('usage_events.')) {
+    const supabase = getSupabaseAdmin()
+    const v = filter.value
+    const pageSize = 1000
+    let offset = 0
+    const out = new Set<number>()
+    const tgIds: number[] = []
+    while (true) {
+      let query = supabase.from('usage_events').select('id, user_id, telegram_id, created_at').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+      switch (filter.op) {
+        case 'eq': query = query.eq(col, v); break
+        case 'neq': query = query.neq(col, v); break
+        case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
+        case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
+        case 'gt': query = query.gt(col, v); break
+        case 'gte': query = query.gte(col, v); break
+        case 'lt': query = query.lt(col, v); break
+        case 'lte': query = query.lte(col, v); break
+        case 'between':
+          if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
+          break
+        case 'before': query = query.lt(col, v); break
+        case 'after': query = query.gt(col, v); break
+        case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
+        case 'is_null': query = query.is(col, null as any); break
+        case 'not_null': query = query.not(col, 'is', null as any); break
+      }
+      const { data, error } = await query
+      if (error) throw error
+      const rows = data || []
+      rows.forEach(r => {
+        const uid = (r as any).user_id
+        const tg = (r as any).telegram_id
+        if (typeof uid === 'number') out.add(uid)
+        else if (typeof tg === 'number') tgIds.push(tg)
+      })
+      if (rows.length < pageSize) break
+      offset += pageSize
+    }
     if (tgIds.length > 0) {
       const mapped = await mapTelegramIdsToUserIds(Array.from(new Set(tgIds)))
       mapped.forEach(id => out.add(id))
@@ -312,18 +444,27 @@ async function getUserIdsForUsageFilter(filter: SegmentFilter): Promise<Set<numb
   }
   if (filter.field.startsWith('input_usage.')) {
     const supabase = getSupabaseAdmin()
-    let query = supabase.from('input_usage').select('telegram_id')
     const v = filter.value
-    switch (filter.op) {
-      case 'eq': query = query.eq(col, v); break
-      case 'neq': query = query.neq(col, v); break
-      case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
-      case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
-      default: break
+    const pageSize = 1000
+    let offset = 0
+    const tgAll: number[] = []
+    while (true) {
+      let query = supabase.from('input_usage').select('id, telegram_id').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+      switch (filter.op) {
+        case 'eq': query = query.eq(col, v); break
+        case 'neq': query = query.neq(col, v); break
+        case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
+        case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
+        default: break
+      }
+      const { data, error } = await query
+      if (error) throw error
+      const rows = data || []
+      rows.forEach(r => { const tg = (r as any).telegram_id; if (typeof tg === 'number') tgAll.push(tg) })
+      if (rows.length < pageSize) break
+      offset += pageSize
     }
-    const { data, error } = await query
-    if (error) throw error
-    const tgIds = Array.from(new Set((data || []).map(r => (r as any).telegram_id).filter((v: any) => typeof v === 'number')))
+    const tgIds = Array.from(new Set(tgAll))
     return await mapTelegramIdsToUserIds(tgIds)
   }
   return new Set<number>()
@@ -331,107 +472,138 @@ async function getUserIdsForUsageFilter(filter: SegmentFilter): Promise<Set<numb
 
 async function getUserIdsForSubscriptionsFilter(filter: SegmentFilter): Promise<Set<number>> {
   const supabase = getSupabaseAdmin()
-  let query = supabase.from('user_subscriptions').select('user_id')
   const [, col] = filter.field.split('.')
   const v = filter.value
-  switch (filter.op) {
-    case 'eq': query = query.eq(col, v); break
-    case 'neq': query = query.neq(col, v); break
-    case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
-    case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
-    case 'gt': query = query.gt(col, v); break
-    case 'gte': query = query.gte(col, v); break
-    case 'lt': query = query.lt(col, v); break
-    case 'lte': query = query.lte(col, v); break
-    case 'between':
-      if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
-      break
-    case 'before': query = query.lt(col, v); break
-    case 'after': query = query.gt(col, v); break
-    case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
-    case 'is_null': query = query.is(col, null as any); break
-    case 'not_null': query = query.not(col, 'is', null as any); break
-  }
-  const { data, error } = await query
-  if (error) throw error
+  const pageSize = 1000
+  let offset = 0
   const ids = new Set<number>()
-  ;(data || []).forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+  while (true) {
+    let query = supabase.from('user_subscriptions').select('id, user_id').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+    switch (filter.op) {
+      case 'eq': query = query.eq(col, v); break
+      case 'neq': query = query.neq(col, v); break
+      case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
+      case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
+      case 'gt': query = query.gt(col, v); break
+      case 'gte': query = query.gte(col, v); break
+      case 'lt': query = query.lt(col, v); break
+      case 'lte': query = query.lte(col, v); break
+      case 'between':
+        if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
+        break
+      case 'before': query = query.lt(col, v); break
+      case 'after': query = query.gt(col, v); break
+      case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
+      case 'is_null': query = query.is(col, null as any); break
+      case 'not_null': query = query.not(col, 'is', null as any); break
+    }
+    const { data, error } = await query
+    if (error) throw error
+    const rows = data || []
+    rows.forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+    if (rows.length < pageSize) break
+    offset += pageSize
+  }
   return ids
 }
 
 async function getUserIdsForCardsFilter(filter: SegmentFilter): Promise<Set<number>> {
   const supabase = getSupabaseAdmin()
-  let query = supabase.from('user_cards').select('user_id')
   const [, col] = filter.field.split('.')
   const v = filter.value
-  switch (filter.op) {
-    case 'eq': query = query.eq(col, v); break
-    case 'neq': query = query.neq(col, v); break
-    default: break
-  }
-  const { data, error } = await query
-  if (error) throw error
+  const pageSize = 1000
+  let offset = 0
   const ids = new Set<number>()
-  ;(data || []).forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+  while (true) {
+    let query = supabase.from('user_cards').select('id, user_id').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+    switch (filter.op) {
+      case 'eq': query = query.eq(col, v); break
+      case 'neq': query = query.neq(col, v); break
+      default: break
+    }
+    const { data, error } = await query
+    if (error) throw error
+    const rows = data || []
+    rows.forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+    if (rows.length < pageSize) break
+    offset += pageSize
+  }
   return ids
 }
 
 async function getUserIdsForBudgetsFilter(filter: SegmentFilter): Promise<Set<number>> {
   const supabase = getSupabaseAdmin()
-  let query = supabase.from('budgets').select('user_id')
   const [, col] = filter.field.split('.')
   const v = filter.value
-  switch (filter.op) {
-    case 'eq':
-      // special: allow field 'has_budgets'
-      if (col === 'has_budgets' && (v === true || v === 'true')) {
-        // any budget rows -> users present here
-        const { data, error } = await supabase.from('budgets').select('user_id')
-        if (error) throw error
-        const ids = new Set<number>()
-        ;(data || []).forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
-        return ids
-      }
-      query = query.eq(col, v)
-      break
-    case 'neq': query = query.neq(col, v); break
-    case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
-    case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
-    case 'gt': query = query.gt(col, v); break
-    case 'gte': query = query.gte(col, v); break
-    case 'lt': query = query.lt(col, v); break
-    case 'lte': query = query.lte(col, v); break
-    case 'between':
-      if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
-      break
-    case 'before': query = query.lt(col, v); break
-    case 'after': query = query.gt(col, v); break
+  const pageSize = 1000
+  let offset = 0
+  // special: allow field 'has_budgets'
+  if (filter.op === 'eq' && col === 'has_budgets' && (v === true || v === 'true')) {
+    const ids = new Set<number>()
+    while (true) {
+      const { data, error } = await supabase.from('budgets').select('id, user_id').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+      if (error) throw error
+      const rows = data || []
+      rows.forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+      if (rows.length < pageSize) break
+      offset += pageSize
+    }
+    return ids
   }
-  const { data, error } = await query
-  if (error) throw error
+  offset = 0
   const ids = new Set<number>()
-  ;(data || []).forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+  while (true) {
+    let query = supabase.from('budgets').select('id, user_id').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+    switch (filter.op) {
+      case 'eq': query = query.eq(col, v); break
+      case 'neq': query = query.neq(col, v); break
+      case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
+      case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
+      case 'gt': query = query.gt(col, v); break
+      case 'gte': query = query.gte(col, v); break
+      case 'lt': query = query.lt(col, v); break
+      case 'lte': query = query.lte(col, v); break
+      case 'between':
+        if (Array.isArray(v) && v.length === 2) { query = query.gte(col, v[0]).lte(col, v[1]) }
+        break
+      case 'before': query = query.lt(col, v); break
+      case 'after': query = query.gt(col, v); break
+    }
+    const { data, error } = await query
+    if (error) throw error
+    const rows = data || []
+    rows.forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+    if (rows.length < pageSize) break
+    offset += pageSize
+  }
   return ids
 }
 
 async function getUserIdsForNotificationsFilter(filter: SegmentFilter): Promise<Set<number>> {
   const supabase = getSupabaseAdmin()
-  let query = supabase.from('user_notifications').select('user_id')
   const [, col] = filter.field.split('.')
   const v = filter.value
-  switch (filter.op) {
-    case 'eq': query = query.eq(col, v); break
-    case 'neq': query = query.neq(col, v); break
-    case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
-    case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
-    case 'before': query = query.lt(col, v); break
-    case 'after': query = query.gt(col, v); break
-    case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
-  }
-  const { data, error } = await query
-  if (error) throw error
+  const pageSize = 1000
+  let offset = 0
   const ids = new Set<number>()
-  ;(data || []).forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+  while (true) {
+    let query = supabase.from('user_notifications').select('id, user_id').order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+    switch (filter.op) {
+      case 'eq': query = query.eq(col, v); break
+      case 'neq': query = query.neq(col, v); break
+      case 'in': query = query.in(col, Array.isArray(v) ? v : [v]); break
+      case 'not_in': query = query.not(col, 'in', Array.isArray(v) ? v : [v]); break
+      case 'before': query = query.lt(col, v); break
+      case 'after': query = query.gt(col, v); break
+      case 'within_days': query = query.gte(col, toISODateFromDaysAgo(Number(v) || 0)); break
+    }
+    const { data, error } = await query
+    if (error) throw error
+    const rows = data || []
+    rows.forEach(r => { const uid = (r as any).user_id; if (typeof uid === 'number') ids.add(uid) })
+    if (rows.length < pageSize) break
+    offset += pageSize
+  }
   return ids
 }
 
@@ -469,6 +641,22 @@ export async function resolveFiltersToUserIds(filters: SegmentFilter[], logic: S
         }
       } else if (f.field === 'derived.transactions_count') {
         set = await getUserIdsForTransactionsCountFilter(f)
+      } else if (f.field === 'derived.mini_app_opened') {
+        const opened = await getUserIdsForMiniAppOpenCountFilter({ field: 'derived.mini_app_open_count', op: 'gt', value: 0 })
+        if (f.op === 'eq') {
+          if (f.value === true) set = opened
+          else if (f.value === false) {
+            const all = await getAllUserIds()
+            set = differenceSets(all, opened)
+          }
+        } else if (f.op === 'neq') {
+          if (f.value === true) {
+            const all = await getAllUserIds()
+            set = differenceSets(all, opened)
+          } else if (f.value === false) set = opened
+        }
+      } else if (f.field === 'derived.mini_app_open_count') {
+        set = await getUserIdsForMiniAppOpenCountFilter(f)
       }
     }
     if (current === null) current = set
@@ -540,6 +728,8 @@ export const SUPPORTED_FIELDS: Array<{ group: string; field: string; label: stri
     { group: 'Derived', field: 'derived.has_active_subscription', label: 'Has Active Subscription', type: 'boolean' },
     { group: 'Derived', field: 'derived.has_cards', label: 'Has Cards', type: 'boolean' },
     { group: 'Transactions', field: 'derived.transactions_count', label: 'Transactions Count', type: 'number' },
+    { group: 'Usage', field: 'derived.mini_app_opened', label: 'Mini App Opened', type: 'boolean' },
+    { group: 'Usage', field: 'derived.mini_app_open_count', label: 'Mini App Open Count', type: 'number' },
   ]
 
 export const OPERATORS_BY_TYPE: Record<'string' | 'number' | 'timestamp' | 'boolean', SegmentOperator[]> = {
