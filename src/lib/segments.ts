@@ -149,6 +149,86 @@ async function getUserIdsForTransactionsFilter(filter: SegmentFilter): Promise<S
   return ids
 }
 
+async function getUserIdsForTransactionsCountFilter(filter: SegmentFilter): Promise<Set<number>> {
+  const supabase = getSupabaseAdmin()
+  // Page through transactions and count per user_id
+  const pageSize = 1000
+  let offset = 0
+  const counts: Record<number, number> = {}
+  while (true) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('user_id')
+      .order('user_id', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+    if (error) throw error
+    const rows = data || []
+    rows.forEach(r => {
+      const uid = (r as any).user_id
+      if (typeof uid === 'number') counts[uid] = (counts[uid] || 0) + 1
+    })
+    if (rows.length < pageSize) break
+    offset += pageSize
+  }
+
+  const toNum = (x: any) => Number(x ?? 0)
+  const v = filter.value
+  const ids = new Set<number>()
+
+  function zeroQualifies(): boolean {
+    const n = toNum(v)
+    switch (filter.op) {
+      case 'eq': return n === 0
+      case 'neq': return 0 !== n
+      case 'gt': return 0 > n
+      case 'gte': return 0 >= n
+      case 'lt': return 0 < n
+      case 'lte': return 0 <= n
+      case 'between': return Array.isArray(v) && v.length === 2 && 0 >= toNum(v[0]) && 0 <= toNum(v[1])
+      case 'in': return Array.isArray(v) ? v.map(toNum).includes(0) : 0 === n
+      case 'not_in': return Array.isArray(v) ? !v.map(toNum).includes(0) : 0 !== n
+      case 'is_null': return true // interpret as no transactions
+      case 'not_null': return false // has at least 1 transaction
+      default: return false
+    }
+  }
+
+  // Evaluate users with at least one transaction
+  for (const [uidStr, cnt] of Object.entries(counts)) {
+    const uid = Number(uidStr)
+    let ok = false
+    switch (filter.op) {
+      case 'eq': ok = cnt === toNum(v); break
+      case 'neq': ok = cnt !== toNum(v); break
+      case 'gt': ok = cnt > toNum(v); break
+      case 'gte': ok = cnt >= toNum(v); break
+      case 'lt': ok = cnt < toNum(v); break
+      case 'lte': ok = cnt <= toNum(v); break
+      case 'between':
+        ok = Array.isArray(v) && v.length === 2 && cnt >= toNum(v[0]) && cnt <= toNum(v[1])
+        break
+      case 'in':
+        ok = Array.isArray(v) ? v.map(toNum).includes(cnt) : cnt === toNum(v)
+        break
+      case 'not_in':
+        ok = Array.isArray(v) ? !v.map(toNum).includes(cnt) : cnt !== toNum(v)
+        break
+      case 'is_null': ok = false; break
+      case 'not_null': ok = cnt > 0; break
+      default: ok = false; break
+    }
+    if (ok) ids.add(uid)
+  }
+
+  // Consider users with zero transactions when relevant
+  if (zeroQualifies()) {
+    const all = await getAllUserIds()
+    all.forEach(uid => { if (!(uid in counts)) ids.add(uid) })
+  }
+
+  return ids
+}
+
 async function getUserIdsForMarketingFilter(filter: SegmentFilter): Promise<Set<number>> {
   const supabase = getSupabaseAdmin()
   let query = supabase.from('marketing_events').select('user_id, telegram_id')
@@ -387,6 +467,8 @@ export async function resolveFiltersToUserIds(filters: SegmentFilter[], logic: S
           const all = await getAllUserIds()
           set = differenceSets(all, set)
         }
+      } else if (f.field === 'derived.transactions_count') {
+        set = await getUserIdsForTransactionsCountFilter(f)
       }
     }
     if (current === null) current = set
@@ -457,6 +539,7 @@ export const SUPPORTED_FIELDS: Array<{ group: string; field: string; label: stri
 
     { group: 'Derived', field: 'derived.has_active_subscription', label: 'Has Active Subscription', type: 'boolean' },
     { group: 'Derived', field: 'derived.has_cards', label: 'Has Cards', type: 'boolean' },
+    { group: 'Transactions', field: 'derived.transactions_count', label: 'Transactions Count', type: 'number' },
   ]
 
 export const OPERATORS_BY_TYPE: Record<'string' | 'number' | 'timestamp' | 'boolean', SegmentOperator[]> = {
