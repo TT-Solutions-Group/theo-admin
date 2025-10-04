@@ -28,6 +28,7 @@ const navItems = [
   { href: '/admin/categories', label: 'Categories', icon: Tags },
   { href: '/admin/category-translations', label: 'Category Translations', icon: Languages },
   { href: '/admin/user-categories', label: 'User Categories', icon: Bookmark },
+  { href: '/admin/analytics/cohorts', label: 'Analytics', icon: Activity },
   // { href: '/admin/user-cards', label: 'Cards', icon: CreditCard },
   { href: '/admin/subscriptions', label: 'Subscriptions', icon: Repeat },
   { href: '/admin/marketing', label: 'Marketing', icon: Megaphone },

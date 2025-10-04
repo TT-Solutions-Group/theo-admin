@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   if (!ok) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const botBase = process.env.BOT_BACKEND_URL
+    const botBase = process.env.BOT_SERVER_URL || process.env.BOT_BACKEND_URL
     const botKey = process.env.BOT_BACKEND_ADMIN_KEY || process.env.BOT_BACKEND_INTERNAL_KEY || process.env.API_INTERNAL_KEY
     if (!botBase || !botKey) return NextResponse.json({ ok: false, error: 'missing_bot_backend_env' }, { status: 500 })
 

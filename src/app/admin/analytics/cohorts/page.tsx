@@ -1,19 +1,29 @@
-import { Suspense } from 'react'
+import { headers } from 'next/headers'
+
+function resolveBaseUrl(): string {
+  const envBase = process.env.NEXT_PUBLIC_APP_BASE_URL
+  if (envBase) return String(envBase).replace(/\/$/, '')
+  const h = headers()
+  const host = h.get('x-forwarded-host') || h.get('host') || 'localhost:3000'
+  const proto = h.get('x-forwarded-proto') || 'http'
+  return `${proto}://${host}`
+}
 
 async function fetchCohorts(params: URLSearchParams) {
   const qs = params.toString()
-  const res = await fetch(`/api/admin/analytics/cohorts${qs ? `?${qs}` : ''}`, { cache: 'no-store' })
+  const base = resolveBaseUrl()
+  const res = await fetch(`${base}/api/admin/analytics/cohorts${qs ? `?${qs}` : ''}`, { cache: 'no-store' })
   if (!res.ok) return { ok: false, rows: [] as any[] }
   return res.json()
 }
 
-export default async function CohortsPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  const p = await searchParams
+export default async function CohortsPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+  const p = searchParams || {}
   const params = new URLSearchParams()
-  params.set('anchor', p.anchor || 'activation')
-  params.set('bucket', p.bucket || 'weekly')
-  params.set('active_def', p.active_def || 'entries_only_v1')
-  params.set('limit', p.limit || '12')
+  params.set('anchor', String(p.anchor || 'activation'))
+  params.set('bucket', String(p.bucket || 'weekly'))
+  params.set('active_def', String(p.active_def || 'entries_only_v1'))
+  params.set('limit', String(p.limit || '12'))
 
   const data = await fetchCohorts(params)
   const rows: Array<{ cohort_key: string; cohort_size: number; windows: Record<string, number> }> = data?.rows || []
