@@ -16,6 +16,31 @@ export default function NotificationsBroadcastPage() {
   const [buttons, setButtons] = useState<Array<{ id: string; text: string; url: string; web_app: boolean }>>([])
   const [buttonsPerRow, setButtonsPerRow] = useState<number>(2)
   const idCounterRef = useRef(0)
+  const [broadcastId, setBroadcastId] = useState('')
+  // Mini App builder state (per-button)
+  const [miniAppBuilders, setMiniAppBuilders] = useState<Record<string, { page: string; query: string }>>({})
+
+  // History state
+  type SentItem = {
+    id: number
+    telegram_id: number
+    message_id: number
+    sent_at: string
+    broadcast_id?: string | null
+    media_type?: string | null
+    html?: string | null
+    caption?: string | null
+    buttons?: string | null
+    protect_content?: boolean
+    disable_web_page_preview?: boolean
+    deleted_at?: string | null
+  }
+  const [history, setHistory] = useState<SentItem[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyLimit, setHistoryLimit] = useState(50)
+  const [historyOffset, setHistoryOffset] = useState(0)
+  const [historyBroadcastId, setHistoryBroadcastId] = useState('')
+  const [historyGrouped, setHistoryGrouped] = useState(false)
 
   // Segmentation state
   type FieldMeta = { group: string; field: string; label: string; type: 'string' | 'number' | 'timestamp' | 'boolean' }
@@ -42,6 +67,8 @@ export default function NotificationsBroadcastPage() {
       })
       .catch(() => {})
   }, [])
+
+  // No base URL needed; we generate t.me deep links using bot username
 
   const groupedFields = useMemo(() => {
     const groups: Record<string, FieldMeta[]> = {}
@@ -143,6 +170,40 @@ export default function NotificationsBroadcastPage() {
     } catch { return null }
   }
 
+  function resolveBotUsername(): string {
+    try {
+      const host = typeof window !== 'undefined' ? window.location.hostname : ''
+      const isLocalHost = /localhost|127\.0\.0\.1|\.local$/i.test(host)
+      const isProd = process.env.NODE_ENV === 'production' && !isLocalHost
+      return isProd ? 'theoai_uz_bot' : 'finumio_bot'
+    } catch {
+      return (process.env.NODE_ENV === 'production') ? 'theoai_uz_bot' : 'finumio_bot'
+    }
+  }
+
+  function encodeStartParam(payload: { path: string; params?: Record<string, any> }): string {
+    try {
+      const json = JSON.stringify(payload)
+      // UTF-8 safe base64 → then URI-encode for query
+      return encodeURIComponent(btoa(unescape(encodeURIComponent(json))))
+    } catch {
+      return ''
+    }
+  }
+
+  function parseQueryToParams(q: string): Record<string, string> | undefined {
+    const query = (q || '').trim()
+    if (!query) return undefined
+    try {
+      const sp = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query)
+      const obj: Record<string, string> = {}
+      sp.forEach((v, k) => { obj[k] = v })
+      return Object.keys(obj).length ? obj : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   function escapeText(t: string): string {
     return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   }
@@ -213,6 +274,8 @@ export default function NotificationsBroadcastPage() {
       const content = editorRef.current?.innerHTML || html
       const tg = toTelegramHtml(content)
       setTgHtml(tg)
+      const bid = (broadcastId && broadcastId.trim()) ? broadcastId.trim() : `bd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+      if (!broadcastId.trim()) setBroadcastId(bid)
       let res: Response
       if (!photoFile && !videoFile) {
         res = await fetch('/api/admin/notifications/broadcast', {
@@ -223,11 +286,18 @@ export default function NotificationsBroadcastPage() {
             disable_web_page_preview: disablePreview,
             protect_content: protectContent,
             buttons: buttons
-              .map(b => ({ text: b.text?.trim(), url: sanitizeUrl(b.url || ''), web_app: !!b.web_app }))
+              .map(b => {
+                const text = b.text?.trim()
+                const url = sanitizeUrl(b.url || '')
+                const isTme = !!url && /https:\/\/t\.me\//i.test(url)
+                const web_app = !!b.web_app && !isTme
+                return { text, url, web_app }
+              })
               .filter(b => b.text && b.url),
             buttons_per_row: buttonsPerRow,
             filters,
             logic,
+            broadcast_id: bid,
           }),
         })
       } else {
@@ -237,9 +307,16 @@ export default function NotificationsBroadcastPage() {
         if (videoFile) fd.append('video', videoFile)
         fd.append('disable_web_page_preview', String(disablePreview))
         fd.append('protect_content', String(protectContent))
+        fd.append('broadcast_id', bid)
         if (buttons && buttons.length > 0) {
           const btns = buttons
-            .map(b => ({ text: b.text?.trim(), url: sanitizeUrl(b.url || ''), web_app: !!b.web_app }))
+            .map(b => {
+              const text = b.text?.trim()
+              const url = sanitizeUrl(b.url || '')
+              const isTme = !!url && /https:\/\/t\.me\//i.test(url)
+              const web_app = !!b.web_app && !isTme
+              return { text, url, web_app }
+            })
             .filter(b => b.text && b.url)
           if (btns.length > 0) {
             fd.append('buttons', JSON.stringify(btns))
@@ -257,6 +334,80 @@ export default function NotificationsBroadcastPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  async function loadHistory(opts?: { reset?: boolean; grouped?: boolean }) {
+    setHistoryLoading(true)
+    try {
+      const limit = historyLimit
+      const offset = opts?.reset ? 0 : historyOffset
+      const params = new URLSearchParams()
+      params.set('limit', String(limit))
+      params.set('offset', String(offset))
+      const bid = historyBroadcastId.trim()
+      if (bid) params.set('broadcast_id', bid)
+      const grouped = opts?.grouped ?? historyGrouped
+      if (grouped) params.set('group', '1')
+      if (opts?.grouped !== undefined) setHistoryGrouped(!!opts.grouped)
+      const res = await fetch(`/api/admin/notifications/history?${params}`)
+      const data = await res.json().catch(() => ({}))
+      if (data?.ok && Array.isArray(data.items)) {
+        setHistory(opts?.reset ? data.items : [...history, ...data.items])
+        setHistoryOffset(offset + limit)
+      }
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  async function deleteOne(item: SentItem) {
+    const payload = { chat_id: item.telegram_id, message_ids: [item.message_id] }
+    const res = await fetch('/api/admin/notifications/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    const data = await res.json().catch(() => ({}))
+    if (data?.ok) {
+      // Soft update UI
+      setHistory(prev => prev.map(it => (it.telegram_id === item.telegram_id && it.message_id === item.message_id) ? { ...it, deleted_at: new Date().toISOString() } : it))
+    }
+  }
+
+  async function deleteByBroadcast() {
+    const bid = historyBroadcastId.trim()
+    if (!bid) return
+    const res = await fetch('/api/admin/notifications/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ broadcast_id: bid }) })
+    await res.json().catch(() => ({}))
+    await loadHistory({ reset: true })
+  }
+
+  async function editText(item: SentItem) {
+    const val = prompt('New message text (HTML allowed):', item.html || '')
+    if (val == null) return
+    const payload = { chat_id: item.telegram_id, message_id: item.message_id, mode: 'text', text: val }
+    const res = await fetch('/api/admin/notifications/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    await res.json().catch(() => ({}))
+  }
+
+  async function editCaption(item: SentItem) {
+    const val = prompt('New caption (HTML allowed):', item.caption || '')
+    if (val == null) return
+    const payload = { chat_id: item.telegram_id, message_id: item.message_id, mode: 'caption', caption: val }
+    const res = await fetch('/api/admin/notifications/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    await res.json().catch(() => ({}))
+  }
+
+  async function editBatchText(bid: string) {
+    const val = prompt('New message text for entire batch (HTML allowed):', '')
+    if (val == null) return
+    const payload = { broadcast_id: bid, mode: 'text', text: val }
+    const res = await fetch('/api/admin/notifications/edit', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    await res.json().catch(() => ({}))
+  }
+
+  async function editBatchCaption(bid: string) {
+    const val = prompt('New caption for entire batch (HTML allowed):', '')
+    if (val == null) return
+    const payload = { broadcast_id: bid, mode: 'caption', caption: val }
+    const res = await fetch('/api/admin/notifications/edit', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    await res.json().catch(() => ({}))
   }
 
   return (
@@ -507,6 +658,11 @@ export default function NotificationsBroadcastPage() {
           </div>
           <div className="grid gap-3">
             <label className="flex flex-col gap-1">
+              <span className="text-sm">Broadcast ID (optional)</span>
+              <input className="border border-[rgb(var(--border))] rounded p-2 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" placeholder="e.g. promo_2025_10" value={broadcastId} onChange={e => setBroadcastId(e.target.value)} />
+              <span className="text-xs text-gray-500">Used to group messages for later edit/delete.</span>
+            </label>
+            <label className="flex flex-col gap-1">
               <span className="text-sm">Photo (optional)</span>
               <input className="border border-[rgb(var(--border))] rounded p-2 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" type="file" accept="image/*" onChange={e => setPhotoFile(e.target.files?.[0] || null)} />
             </label>
@@ -544,6 +700,7 @@ export default function NotificationsBroadcastPage() {
               </select>
             </div>
           </div>
+          {/* Mini App base URL not required; using t.me deep links */}
           <div className="flex flex-col gap-3">
             {buttons.map((b, idx) => (
               <div key={b.id} className="grid grid-cols-12 gap-2 items-end">
@@ -574,7 +731,13 @@ export default function NotificationsBroadcastPage() {
                     <input
                       type="checkbox"
                       checked={b.web_app}
-                      onChange={e => setButtons(prev => prev.map((it, i) => i === idx ? { ...it, web_app: e.target.checked } : it))}
+                      onChange={e => {
+                        const next = e.target.checked
+                        setButtons(prev => prev.map((it, i) => i === idx ? { ...it, web_app: next } : it))
+                        if (next) {
+                          setMiniAppBuilders(prev => ({ ...prev, [b.id]: prev[b.id] || { page: '/subscribe', query: '' } }))
+                        }
+                      }}
                     />
                     <span className="text-xs">WebApp</span>
                   </label>
@@ -588,6 +751,66 @@ export default function NotificationsBroadcastPage() {
                     Remove
                   </button>
                 </div>
+                {/* Mini App link builder (visible when WebApp is checked) */}
+                {b.web_app && (
+                  <div className="col-span-12 grid grid-cols-12 gap-2 border border-[rgb(var(--border))] rounded p-2 mt-2">
+                    <div className="col-span-4">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs">Mini App Page</span>
+                        <select
+                          className="border rounded px-2 py-2 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]"
+                          value={miniAppBuilders[b.id]?.page || '/subscribe'}
+                          onChange={e => setMiniAppBuilders(prev => ({ ...prev, [b.id]: { page: e.target.value, query: prev[b.id]?.query || '' } }))}
+                        >
+                          <option value="/">Home</option>
+                          <option value="/subscribe">Subscribe</option>
+                          <option value="/subscription">Subscription</option>
+                          <option value="/budget-goals">Budget goals</option>
+                          <option value="/categories">Categories</option>
+                          <option value="/analytics">Analytics</option>
+                          <option value="/transactions">Transactions</option>
+                          <option value="/add-card">Add card</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="col-span-6">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs">Query (key=value&key2=value2)</span>
+                        <input
+                          className="border rounded px-3 py-2 bg-[rgb(var(--card))] text-[rgb(var(--foreground))]"
+                          placeholder="plan=pro"
+                          value={miniAppBuilders[b.id]?.query || ''}
+                          onChange={e => setMiniAppBuilders(prev => ({ ...prev, [b.id]: { page: prev[b.id]?.page || '/subscribe', query: e.target.value } }))}
+                        />
+                      </label>
+                    </div>
+                    <div className="col-span-2 flex items-end">
+                      <button
+                        type="button"
+                        className="px-3 py-2 rounded border border-[rgb(var(--border))] w-full"
+                        onClick={() => {
+                          const conf = miniAppBuilders[b.id] || { page: '/subscribe', query: '' }
+                          const path = conf.page || '/'
+                          const params = parseQueryToParams(conf.query || '')
+                          const startParam = encodeStartParam({ path, params })
+                          const tme = `https://t.me/${resolveBotUsername()}?startapp=${startParam}`
+                          const ok = sanitizeUrl(tme)
+                          if (!ok) {
+                            alert('Failed to build deep link')
+                            return
+                          }
+                          // Use URL button for t.me deep link; disable web_app to avoid Bot API rejecting the URL
+                          setButtons(prev => prev.map((it, i) => i === idx ? { ...it, url: ok, web_app: false } : it))
+                        }}
+                      >
+                        Generate t.me Link
+                      </button>
+                    </div>
+                    <div className="col-span-12">
+                      <span className="text-[10px] text-gray-500">Generates a Main Mini App deep link (URL button). The WebApp flag is disabled automatically.</span>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
             <div>
@@ -621,6 +844,62 @@ export default function NotificationsBroadcastPage() {
         {result && (
           <pre className="p-3 rounded text-xs overflow-x-auto border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--foreground))]">{JSON.stringify(result, null, 2)}</pre>
         )}
+        {/* History */}
+        <div className="mt-6 border border-[rgb(var(--border))] rounded">
+          <div className="px-3 py-2 flex items-center justify-between border-b border-[rgb(var(--border))]">
+            <span className="text-sm font-medium">Notifications history</span>
+            <div className="flex items-center gap-2">
+              <input className="border rounded px-2 py-1 text-xs bg-[rgb(var(--card))] text-[rgb(var(--foreground))]" placeholder="Filter by Broadcast ID" value={historyBroadcastId} onChange={e => setHistoryBroadcastId(e.target.value)} />
+              <button type="button" className="px-2 py-1 text-xs border rounded" onClick={() => { setHistory([]); setHistoryOffset(0); loadHistory({ reset: true, grouped: false }) }} disabled={historyLoading}>{historyLoading ? 'Loading…' : 'Load'}</button>
+              <button type="button" className="px-2 py-1 text-xs border rounded" onClick={() => { setHistory([]); setHistoryOffset(0); loadHistory({ reset: true, grouped: true }) }} disabled={historyLoading}>Load grouped</button>
+              <button type="button" className="px-2 py-1 text-xs border rounded" onClick={deleteByBroadcast} disabled={!historyBroadcastId.trim()}>Delete all with ID</button>
+            </div>
+          </div>
+          <div className="p-2 text-xs grid gap-2">
+            {history.length === 0 ? (
+              <span className="text-gray-500">No items loaded.</span>
+            ) : (
+              history.map((it: any, idx: number) => {
+                const isGroup = typeof it?.message_count === 'number' && !!it?.broadcast_id
+                return isGroup ? (
+                  <div key={`g_${it.broadcast_id || 'null'}_${idx}`} className="border border-[rgb(var(--border))] rounded p-2">
+                    <div className="flex flex-wrap gap-3 items-center">
+                      <span>Broadcast: {it.broadcast_id || '(no id)'}</span>
+                      <span>Msgs: {typeof it.message_count === 'number' ? it.message_count : 0}</span>
+                      <span>First: {it.first_sent_at ? new Date(it.first_sent_at).toLocaleString() : '-'}</span>
+                      <span>Last: {it.last_sent_at ? new Date(it.last_sent_at).toLocaleString() : '-'}</span>
+                    </div>
+                  <div className="mt-1 line-clamp-2 break-words opacity-80">{(it.preview_text || '').slice(0, 200)}</div>
+                  <div className="mt-2 flex items-center gap-2">
+                      <button className="px-2 py-1 border rounded" onClick={() => editBatchText(it.broadcast_id)}>Edit all texts</button>
+                      <button className="px-2 py-1 border rounded" onClick={() => editBatchCaption(it.broadcast_id)}>Edit all captions</button>
+                      <button className="px-2 py-1 border rounded" onClick={deleteByBroadcast}>Delete all</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={`${it.telegram_id}_${it.message_id}_${it.sent_at || idx}`} className="border border-[rgb(var(--border))] rounded p-2">
+                    <div className="flex flex-wrap gap-3 items-center">
+                      <span>Chat: {it.telegram_id}</span>
+                      <span>Msg: {it.message_id}</span>
+                      <span>Sent: {it.sent_at ? new Date(it.sent_at).toLocaleString() : '-'}</span>
+                      {it.broadcast_id ? <span>Broadcast: {it.broadcast_id}</span> : null}
+                      {it.deleted_at ? <span className="text-red-500">Deleted</span> : null}
+                    </div>
+                    <div className="mt-1 line-clamp-2 break-words opacity-80">{(it.caption || it.html || '').slice(0, 160)}</div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button className="px-2 py-1 border rounded" onClick={() => editText(it)}>Edit text</button>
+                      <button className="px-2 py-1 border rounded" onClick={() => editCaption(it)}>Edit caption</button>
+                      <button className="px-2 py-1 border rounded" onClick={() => deleteOne(it)}>Delete</button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+            {history.length > 0 && (
+              <button type="button" className="px-2 py-1 text-xs border rounded w-max" onClick={() => loadHistory({ grouped: historyGrouped })}>Load more</button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

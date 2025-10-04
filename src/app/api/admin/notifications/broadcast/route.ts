@@ -1,5 +1,6 @@
 import { requireAdmin } from '@/lib/auth'
 import { resolveFiltersToUserIds, type SegmentFilter, type SegmentLogic } from '@/lib/segments'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import { NextRequest, NextResponse } from 'next/server'
 
 function joinUrl(base: string, path: string) {
@@ -51,6 +52,26 @@ export async function POST(request: NextRequest) {
       if (user_ids && user_ids.length > 0) form.set('user_ids', JSON.stringify(user_ids))
       const res = await fetch(botUrl, { method: 'POST', headers: { 'X-Api-Key': key }, body: form as any })
       const data = await res.json().catch(() => ({}))
+      // Persist history rows in Supabase if bot returns them
+      try {
+        if (data?.ok && Array.isArray(data?.sent_rows) && data?.broadcast_id) {
+          const supabase = getSupabaseAdmin()
+          const rows = (data.sent_rows as Array<any>).map((r: any) => ({
+            telegram_id: Number(r?.telegram_id || 0),
+            message_id: Number(r?.message_id || 0),
+            broadcast_id: String(data.broadcast_id),
+            media_type: 'text',
+            html: null,
+            caption: null,
+            buttons: null,
+            protect_content: false,
+            disable_web_page_preview: true,
+          }))
+          if (rows.length > 0) {
+            await supabase.from('sent_notifications').insert(rows)
+          }
+        }
+      } catch {}
       if (!res.ok) {
         return NextResponse.json({ ok: false, error: data?.error || 'bot_error' }, { status: res.status })
       }
@@ -66,6 +87,26 @@ export async function POST(request: NextRequest) {
       const body = { ...payload, ...(user_ids && user_ids.length > 0 ? { user_ids } : {}) }
       const res = await postBot('/api/notifications/broadcast', body, baseUrl)
       const data = await res.json().catch(() => ({}))
+      // Persist history rows if available on JSON fallback as well
+      try {
+        if (data?.ok && Array.isArray(data?.sent_rows) && data?.broadcast_id) {
+          const supabase = getSupabaseAdmin()
+          const rows = (data.sent_rows as Array<any>).map((r: any) => ({
+            telegram_id: Number(r?.telegram_id || 0),
+            message_id: Number(r?.message_id || 0),
+            broadcast_id: String(data.broadcast_id),
+            media_type: body?.media_type || (body?.photo || body?.video ? (body?.video ? 'video' : 'photo') : 'text'),
+            html: typeof body?.html === 'string' ? body.html : null,
+            caption: typeof body?.html === 'string' ? body.html : null,
+            buttons: Array.isArray(body?.buttons) ? JSON.stringify(body.buttons) : null,
+            protect_content: Boolean(body?.protect_content),
+            disable_web_page_preview: Boolean(body?.disable_web_page_preview),
+          }))
+          if (rows.length > 0) {
+            await supabase.from('sent_notifications').insert(rows)
+          }
+        }
+      } catch {}
       if (!res.ok) {
         return NextResponse.json({ ok: false, error: data?.error || 'bot_error' }, { status: res.status })
       }
