@@ -12,7 +12,12 @@ function resolveBaseUrl(): string {
 async function fetchCohorts(params: URLSearchParams) {
   const qs = params.toString()
   const base = resolveBaseUrl()
-  const res = await fetch(`${base}/api/admin/analytics/cohorts${qs ? `?${qs}` : ''}`, { cache: 'no-store' })
+  const h = headers()
+  const cookie = h.get('cookie') || ''
+  const res = await fetch(`${base}/api/admin/analytics/cohorts${qs ? `?${qs}` : ''}`, {
+    cache: 'no-store',
+    headers: { cookie },
+  })
   if (!res.ok) return { ok: false, rows: [] as any[] }
   return res.json()
 }
