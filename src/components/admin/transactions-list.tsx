@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react'
+import { ChevronDown, ChevronRight, TrendingDown, TrendingUp } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface Transaction {
 	id: string | number
@@ -175,17 +175,17 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 			if (!groupedTransactions[key]) groupedTransactions[key] = []
 			groupedTransactions[key].push(t)
 		})
-	} else if (groupBy === 'date') {
-		transactions.forEach(t => {
-			const key = new Date(t.date).toLocaleDateString('en-US', {
-				month: 'long',
-				day: 'numeric',
-				year: 'numeric'
-			})
-			if (!groupedTransactions[key]) groupedTransactions[key] = []
-			groupedTransactions[key].push(t)
-		})
-	}
+  } else if (groupBy === 'date') {
+    transactions.forEach(t => {
+      const key = new Date(t.created_at).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      })
+      if (!groupedTransactions[key]) groupedTransactions[key] = []
+      groupedTransactions[key].push(t)
+    })
+  }
 
 	// Sort group keys
 	const sortedGroups = Object.keys(groupedTransactions).sort((a, b) => {
@@ -260,9 +260,9 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 													</tr>
 												</thead>
 												<tbody>
-													{groupTransactions.map(t => (
+                            {groupTransactions.map(t => (
 														<tr key={t.id}>
-															<td className="text-sm">{formatDate(t.date)}</td>
+                                <td className="text-sm">{formatDate(t.created_at)}</td>
 															{groupBy !== 'user' && <td>{getUserName(t)}</td>}
 															{groupBy !== 'category' && <td>{getCategoryName(t)}</td>}
 															<td>{t.title || t.description || '—'}</td>
@@ -306,9 +306,9 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 									</td>
 								</tr>
 							) : (
-								transactions.map(t => (
+                transactions.map(t => (
 									<tr key={t.id}>
-										<td className="text-sm">{formatDate(t.date)}</td>
+                    <td className="text-sm">{formatDate(t.created_at)}</td>
 										<td>{getUserName(t)}</td>
 										<td>{getCategoryName(t)}</td>
 										<td>{t.title || t.description || '—'}</td>

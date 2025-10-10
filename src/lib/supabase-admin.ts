@@ -183,8 +183,8 @@ export async function listPayments(params: { limit?: number; offset?: number }) 
 
 export async function getTransactionStats(params: { startDate?: string; endDate?: string } = {}) {
 	const supabase = getSupabaseAdmin()
-	const isoStart = toStartOfDayISO(params.startDate)
-	const isoEnd = toEndOfDayISO(params.endDate)
+  const isoStart = toStartOfDayISO(params.startDate)
+  const isoEnd = toEndOfDayISO(params.endDate)
 
 	// Supabase caps select responses at 1000 rows; page through everything so totals stay accurate.
 	const sumByType = async (type: 'income' | 'expense') => {
@@ -192,13 +192,13 @@ export async function getTransactionStats(params: { startDate?: string; endDate?
 		let offset = 0
 		let total = 0
 		while (true) {
-			let query = supabase
-				.from('transactions')
-				.select('amount')
-				.eq('type', type)
-				.range(offset, offset + pageSize - 1)
-			if (isoStart) query = query.gte('date', isoStart)
-			if (isoEnd) query = query.lte('date', isoEnd)
+      let query = supabase
+        .from('transactions')
+        .select('amount')
+        .eq('type', type)
+        .range(offset, offset + pageSize - 1)
+      if (isoStart) query = query.gte('created_at', isoStart)
+      if (isoEnd) query = query.lte('created_at', isoEnd)
 			const { data, error } = await query
 			if (error) throw error
 			const rows = data ?? []
@@ -209,9 +209,9 @@ export async function getTransactionStats(params: { startDate?: string; endDate?
 		return total
 	}
 
-	let totalQuery = supabase.from('transactions').select('id', { count: 'exact', head: true })
-	if (isoStart) totalQuery = totalQuery.gte('date', isoStart)
-	if (isoEnd) totalQuery = totalQuery.lte('date', isoEnd)
+  let totalQuery = supabase.from('transactions').select('id', { count: 'exact', head: true })
+  if (isoStart) totalQuery = totalQuery.gte('created_at', isoStart)
+  if (isoEnd) totalQuery = totalQuery.lte('created_at', isoEnd)
 
 	const [totalRes, totalIncome, totalExpense] = await Promise.all([
 		totalQuery,
@@ -235,19 +235,25 @@ export async function listTransactions(params: { limit?: number; offset?: number
 	
 	let query = supabase
 		.from('transactions')
-		.select('id, user_id, category_id, amount, type, currency, date, created_at, source, title, description, voice_log_id, user:users!transactions_user_id_fkey(id, username, first_name, last_name, display_name), category:categories!transactions_category_id_fkey(id, name)')
-		.order('date', { ascending: false })
+    .select('id, user_id, category_id, amount, type, currency, date, created_at, source, title, description, voice_log_id, user:users!transactions_user_id_fkey(id, username, first_name, last_name, display_name), category:categories!transactions_category_id_fkey(id, name)')
+    .order('created_at', { ascending: false })
 		.range(offset, offset + limit - 1)
 
 	if (userId) query = query.eq('user_id', userId)
 	if (categoryId) query = query.eq('category_id', categoryId)
 	if (type) query = query.eq('type', type)
-	if (isoStart) query = query.gte('date', isoStart)
-	if (isoEnd) query = query.lte('date', isoEnd)
+  if (isoStart) query = query.gte('created_at', isoStart)
+  if (isoEnd) query = query.lte('created_at', isoEnd)
 	
 	const { data, error } = await query
 	if (error) throw error
-	return data || []
+  const rows = (data || []) as Array<any>
+  // Ensure embedded relations are objects, not arrays
+  return rows.map(r => ({
+    ...r,
+    user: Array.isArray(r?.user) ? r.user[0] : r.user,
+    category: Array.isArray(r?.category) ? r.category[0] : r.category,
+  }))
 }
 
 export async function listCategories(params: { limit?: number; offset?: number }) {

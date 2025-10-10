@@ -1,8 +1,8 @@
-import { getTransactionStats, listTransactions } from '@/lib/supabase-admin'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { TransactionsList } from '@/components/admin/transactions-list'
 import { TransactionsDateRangePicker } from '@/components/admin/transactions-date-range'
-import { TrendingUp, TrendingDown, Activity, Calendar } from 'lucide-react'
+import { TransactionsList } from '@/components/admin/transactions-list'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { getTransactionStats, listTransactions } from '@/lib/supabase-admin'
+import { Activity, Calendar, TrendingDown, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
 function formatDateRangeLabel(startDate: string, endDate: string) {
@@ -49,7 +49,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const groupBy = (params.groupBy || 'none') as 'none' | 'user' | 'category' | 'date'
   
   // Fetch initial transactions (first 100) for the selected date range
-  const transactions = await listTransactions({ limit: 100, offset: 0, startDate, endDate }).catch(() => [])
+  const transactions = await listTransactions({ limit: 100, offset: 0, startDate, endDate }).catch(() => [] as any[])
   
   // Fetch stats scoped to the selected range
   const stats = await getTransactionStats({ startDate, endDate }).catch(() => ({
