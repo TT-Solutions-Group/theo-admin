@@ -235,7 +235,7 @@ export async function listTransactions(params: { limit?: number; offset?: number
 	
 	let query = supabase
 		.from('transactions')
-    .select('id, user_id, category_id, amount, type, currency, date, created_at, source, title, description, voice_log_id, user:users!transactions_user_id_fkey(id, username, first_name, last_name, display_name), category:categories!transactions_category_id_fkey(id, name)')
+	    .select('id, user_id, category_id, amount, type, currency, date, created_at, source, title, description, voice_log_id, debt_parent_id, debt_direction, user:users!transactions_user_id_fkey(id, username, first_name, last_name, display_name), category:categories!transactions_category_id_fkey(id, name)')
     .order('created_at', { ascending: false })
 		.range(offset, offset + limit - 1)
 

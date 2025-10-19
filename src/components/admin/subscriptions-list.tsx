@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { formatCurrency } from '@/lib/currency'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronRight, CreditCard, AlertCircle, CheckCircle, XCircle } from 'lucide-react'
 
@@ -47,13 +48,8 @@ function formatDate(date: string | null) {
 	}
 }
 
-function formatAmount(amount: number, currency: string = 'UZS') {
-	return new Intl.NumberFormat('en-US', {
-		style: 'currency',
-		currency: currency === 'UZS' ? 'UZS' : currency,
-		minimumFractionDigits: currency === 'UZS' ? 0 : 2,
-		maximumFractionDigits: currency === 'UZS' ? 0 : 2
-	}).format(amount).replace('UZS', 'UZS')
+function formatAmount(amount: number, currency?: string | null) {
+	return formatCurrency(amount, currency)
 }
 
 function getUserName(subscription: Subscription) {

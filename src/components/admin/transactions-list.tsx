@@ -1,6 +1,7 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { formatCurrency } from '@/lib/currency'
 import { ChevronDown, ChevronRight, TrendingDown, TrendingUp } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -18,6 +19,8 @@ interface Transaction {
 	title: string | null
 	description: string | null
 	voice_log_id: number | null
+	debt_parent_id?: number | null
+	debt_direction?: 'owed_by_me' | 'owed_to_me' | null
 	user?: {
 		id: number
 		username: string | null
@@ -51,13 +54,8 @@ function formatDate(date: string) {
 	}
 }
 
-function formatAmount(amount: number, currency: string = 'USD') {
-	return new Intl.NumberFormat('en-US', {
-		style: 'currency',
-		currency: currency === 'UZS' ? 'UZS' : currency,
-		minimumFractionDigits: currency === 'UZS' ? 0 : 2,
-		maximumFractionDigits: currency === 'UZS' ? 0 : 2
-	}).format(amount).replace('UZS', 'UZS')
+function formatAmount(amount: number, currency?: string | null) {
+	return formatCurrency(amount, currency)
 }
 
 function getUserName(transaction: Transaction) {
@@ -266,11 +264,23 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 															{groupBy !== 'user' && <td>{getUserName(t)}</td>}
 															{groupBy !== 'category' && <td>{getCategoryName(t)}</td>}
 															<td>{t.title || t.description || '—'}</td>
-															<td>
-																<Badge variant={t.type === 'income' ? 'green' : 'red'}>
-																	{t.type}
-																</Badge>
-															</td>
+						<td>
+							{t.type === 'debt' ? (
+								<div className="flex items-center gap-2">
+									<Badge variant="purple">debt</Badge>
+									{t.debt_direction && (
+										<Badge variant="default">{t.debt_direction}</Badge>
+									)}
+									{t.debt_parent_id ? (
+										<Badge variant="yellow">settlement</Badge>
+									) : null}
+								</div>
+							) : (
+								<Badge variant={t.type === 'income' ? 'green' : 'red'}>
+									{t.type}
+								</Badge>
+							)}
+						</td>
 															<td className={t.type === 'income' ? 'text-green-500' : 'text-red-500'}>
 																{t.type === 'income' ? '+' : '-'}{formatAmount(t.amount, t.currency || 'UZS')}
 															</td>
@@ -312,11 +322,23 @@ export function TransactionsList({ initialTransactions, groupBy, hasMore: initia
 										<td>{getUserName(t)}</td>
 										<td>{getCategoryName(t)}</td>
 										<td>{t.title || t.description || '—'}</td>
-										<td>
-											<Badge variant={t.type === 'income' ? 'green' : 'red'}>
-												{t.type}
-											</Badge>
-										</td>
+						<td>
+							{t.type === 'debt' ? (
+								<div className="flex items-center gap-2">
+									<Badge variant="purple">debt</Badge>
+									{t.debt_direction && (
+										<Badge variant="default">{t.debt_direction}</Badge>
+									)}
+									{t.debt_parent_id ? (
+										<Badge variant="yellow">settlement</Badge>
+									) : null}
+								</div>
+							) : (
+								<Badge variant={t.type === 'income' ? 'green' : 'red'}>
+									{t.type}
+								</Badge>
+							)}
+						</td>
 										<td className={t.type === 'income' ? 'text-green-500' : 'text-red-500'}>
 											{t.type === 'income' ? '+' : '-'}{formatAmount(t.amount, t.currency || 'UZS')}
 										</td>

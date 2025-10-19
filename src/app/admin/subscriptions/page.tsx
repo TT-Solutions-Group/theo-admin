@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SubscriptionsList } from '@/components/admin/subscriptions-list'
 import { CreditCard, TrendingUp, AlertCircle, XCircle, DollarSign } from 'lucide-react'
 import Link from 'next/link'
+import { formatCurrency } from '@/lib/currency'
 
 export default async function SubscriptionsPage({ searchParams }: { searchParams: Promise<{ groupBy?: string }> }) {
   const params = await searchParams
@@ -24,12 +25,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
   const hasMore = subscriptions.length === 100
 
   function formatAmount(amount: number) {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'UZS',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount).replace('UZS', 'UZS')
+    return formatCurrency(amount, 'UZS')
   }
 
   // Get plan breakdown

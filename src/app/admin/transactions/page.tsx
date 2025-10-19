@@ -2,6 +2,7 @@ import { TransactionsDateRangePicker } from '@/components/admin/transactions-dat
 import { TransactionsList } from '@/components/admin/transactions-list'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getTransactionStats, listTransactions } from '@/lib/supabase-admin'
+import { formatCurrency } from '@/lib/currency'
 import { Activity, Calendar, TrendingDown, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
@@ -62,12 +63,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const hasMore = transactions.length === 100
 
   function formatAmount(amount: number) {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'UZS',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount).replace('UZS', 'UZS')
+    return formatCurrency(amount, 'UZS')
   }
 
   return (
