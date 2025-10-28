@@ -319,11 +319,11 @@ export async function listUserCards(params: { limit?: number; offset?: number })
 export async function getTrialStats() {
 	const supabase = getSupabaseAdmin()
 
-	// Count users who have consumed trials (TRIAL_CONSUMED = true)
+	// Count users who have consumed trials (trial_consumed = true)
 	const { count, error } = await supabase
 		.from('users')
 		.select('id', { count: 'exact', head: true })
-		.eq('TRIAL_CONSUMED', true)
+		.eq('trial_consumed', true)
 
 	if (error) {
 		console.error('Error fetching trial stats:', error)
