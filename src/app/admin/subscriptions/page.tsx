@@ -1,7 +1,7 @@
-import { getSubscriptionStats, listUserSubscriptions, getTrialStats } from '@/lib/supabase-admin'
+import { getSubscriptionStats, listUserSubscriptions, getTrialStats, getTrialConversionStats } from '@/lib/supabase-admin'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SubscriptionsList } from '@/components/admin/subscriptions-list'
-import { CreditCard, TrendingUp, AlertCircle, XCircle, DollarSign, FlaskConical } from 'lucide-react'
+import { CreditCard, TrendingUp, AlertCircle, XCircle, DollarSign, FlaskConical, ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency } from '@/lib/currency'
 
@@ -26,6 +26,13 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
   const trialStats = await getTrialStats().catch(() => ({
     trialUsersCount: 0
   }))
+
+  // Fetch trial conversion stats
+  const conversionStats = await getTrialConversionStats().catch(() => ({
+    trialUsersCount: 0,
+    convertedCount: 0,
+    conversionRate: 0
+  }))
   
   const hasMore = subscriptions.length === 100
 
@@ -47,7 +54,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -134,6 +141,23 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                 <p className="text-xs text-[rgb(var(--muted-foreground))]">users consumed</p>
               </div>
               <FlaskConical className="w-8 h-8 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[rgb(var(--muted-foreground))]">Trial → Pro</p>
+                <p className="text-2xl font-bold text-purple-500">
+                  {conversionStats.convertedCount.toLocaleString()}
+                </p>
+                <p className="text-xs text-[rgb(var(--muted-foreground))]">
+                  {conversionStats.conversionRate.toFixed(1)}% conversion
+                </p>
+              </div>
+              <ArrowUpRight className="w-8 h-8 text-purple-500" />
             </div>
           </CardContent>
         </Card>
