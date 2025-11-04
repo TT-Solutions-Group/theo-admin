@@ -366,11 +366,12 @@ export async function getTrialConversionStats() {
 	// Get the user IDs
 	const trialUserIds = trialUsers.map(u => u.id)
 
-	// Count how many of these users have subscriptions
-	const { count: convertedCount, error: subsError } = await supabase
+	// Fetch subscription records for these users that represent a paid plan
+	const { data: convertedSubscriptions, error: subsError } = await supabase
 		.from('user_subscriptions')
-		.select('user_id', { count: 'exact', head: true })
+		.select('user_id, status')
 		.in('user_id', trialUserIds)
+		.in('status', ['active', 'cancelled', 'payment_failed'])
 
 	if (subsError) {
 		console.error('Error fetching converted users:', subsError)
@@ -381,7 +382,8 @@ export async function getTrialConversionStats() {
 		}
 	}
 
-	const converted = convertedCount ?? 0
+	const convertedUserIds = new Set((convertedSubscriptions ?? []).map(sub => sub.user_id))
+	const converted = convertedUserIds.size
 	const conversionRate = trialUsersCount > 0 ? (converted / trialUsersCount) * 100 : 0
 
 	return {
