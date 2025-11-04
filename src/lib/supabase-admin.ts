@@ -369,9 +369,10 @@ export async function getTrialConversionStats() {
 	// Fetch subscription records for these users that represent a paid plan
 	const { data: convertedSubscriptions, error: subsError } = await supabase
 		.from('user_subscriptions')
-		.select('user_id, status')
+		.select('user_id, status, plan_type')
 		.in('user_id', trialUserIds)
 		.in('status', ['active', 'cancelled', 'payment_failed'])
+		.neq('plan_type', 'trial')
 
 	if (subsError) {
 		console.error('Error fetching converted users:', subsError)
