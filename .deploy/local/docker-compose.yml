@@ -1,0 +1,22 @@
+services:
+  theo-admin-local:
+      container_name: theo-admin-local
+      build:
+        context: ../..
+        dockerfile: .deploy/_shared/Dockerfile
+      ports:
+        - "10200:3000"
+      restart: unless-stopped
+      volumes:
+        - ../../:/app
+        - /app/node_modules
+        - /app/.next
+      env_file:
+        - ../../.env
+      environment:
+        - NODE_ENV=development
+
+networks:
+  default:
+    external: true
+    name: theo_network

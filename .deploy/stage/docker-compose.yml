@@ -1,0 +1,16 @@
+services:
+  theo-admin-stage:
+    container_name: theo-admin-stage
+    image: registry.gitlab.com/theo-ai/admin/theo-admin:stage-latest
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    ports:
+      - 10203:3000
+    environment:
+      - NODE_ENV=production
+
+networks:
+  default:
+    external: true
+    name: theo_network
