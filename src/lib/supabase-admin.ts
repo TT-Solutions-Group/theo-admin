@@ -335,6 +335,65 @@ export async function getTrialStats() {
 	}
 }
 
+export async function getTrialConversionStats() {
+	const supabase = getSupabaseAdmin()
+
+	// Get all users who have consumed trials
+	const { data: trialUsers, error: trialError } = await supabase
+		.from('users')
+		.select('id')
+		.eq('trial_consumed', true)
+
+	if (trialError) {
+		console.error('Error fetching trial users:', trialError)
+		return {
+			trialUsersCount: 0,
+			convertedCount: 0,
+			conversionRate: 0
+		}
+	}
+
+	const trialUsersCount = trialUsers?.length ?? 0
+
+	if (trialUsersCount === 0) {
+		return {
+			trialUsersCount: 0,
+			convertedCount: 0,
+			conversionRate: 0
+		}
+	}
+
+	// Get the user IDs
+	const trialUserIds = trialUsers.map(u => u.id)
+
+	// Fetch subscription records for these users that represent a paid plan
+	const { data: convertedSubscriptions, error: subsError } = await supabase
+		.from('user_subscriptions')
+		.select('user_id, status, plan_type')
+		.in('user_id', trialUserIds)
+		.in('status', ['active', 'cancelled', 'payment_failed'])
+		.neq('plan_type', 'trial')
+
+	if (subsError) {
+		console.error('Error fetching converted users:', subsError)
+		return {
+			trialUsersCount,
+			convertedCount: 0,
+			conversionRate: 0
+		}
+	}
+
+	const convertedUserIds = new Set((convertedSubscriptions ?? []).map(sub => sub.user_id))
+	const converted = convertedUserIds.size
+	const conversionRate = trialUsersCount > 0 ? (converted / trialUsersCount) * 100 : 0
+
+	return {
+		trialUsersCount,
+		convertedCount: converted,
+		conversionRate
+	}
+}
+
 export async function getSubscriptionStats() {
 	const supabase = getSupabaseAdmin()
 
