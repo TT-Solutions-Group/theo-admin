@@ -512,3 +512,477 @@ export async function listGoalContributions(params: { limit?: number; offset?: n
 	if (error) throw error
 	return data || []
 }
+
+// ==================== COHORT ANALYTICS ====================
+
+import {
+	startOfWeek,
+	startOfMonth,
+	startOfDay,
+	format,
+	differenceInDays,
+	differenceInWeeks,
+	differenceInMonths,
+	addDays,
+	addWeeks,
+	addMonths,
+	parseISO
+} from 'date-fns'
+import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+
+export type CohortBucket = 'daily' | 'weekly' | 'monthly'
+// Anchors from cohort.md spec
+export type CohortAnchor = 'acquisition' | 'activation' | 'billing' | 'trial'
+// Active definitions from cohort.md spec
+export type ActiveDefinition = 'entries_only' | 'miniapp_only' | 'entries_or_miniapp' | 'entries_and_miniapp'
+
+export type CohortRow = {
+	cohort_key: string // e.g., "2025-W01", "2025-01", "2025-01-15"
+	cohort_date: Date
+	cohort_size: number
+	users: number[] // user IDs in this cohort
+	windows: Record<string, number> // Retention rates: { "W0": 1.0, "W1": 0.85, "W2": 0.72, ... }
+	absolute: Record<string, number> // Absolute numbers: { "W0": 100, "W1": 85, "W2": 72, ... }
+	revenue?: Record<string, number> // Revenue per window (optional)
+}
+
+export type CohortData = {
+	rows: CohortRow[]
+	totalUsers: number
+	avgRetention: Record<string, number>
+	bestCohort: string | null
+}
+
+/**
+ * Format date to cohort key based on bucket type
+ */
+function formatCohortKey(date: Date, bucket: CohortBucket): string {
+	switch (bucket) {
+		case 'daily':
+			return format(date, 'yyyy-MM-dd')
+		case 'weekly':
+			return format(date, 'yyyy-\'W\'II') // ISO week: 2025-W01
+		case 'monthly':
+			return format(date, 'yyyy-MM')
+	}
+}
+
+/**
+ * Get the start of period for a date based on bucket
+ */
+function getStartOfPeriod(date: Date, bucket: CohortBucket): Date {
+	switch (bucket) {
+		case 'daily':
+			return startOfDay(date)
+		case 'weekly':
+			return startOfWeek(date, { weekStartsOn: 1 }) // Monday
+		case 'monthly':
+			return startOfMonth(date)
+	}
+}
+
+/**
+ * Calculate time difference in periods
+ */
+function getDifference(start: Date, end: Date, bucket: CohortBucket): number {
+	switch (bucket) {
+		case 'daily':
+			return differenceInDays(end, start)
+		case 'weekly':
+			return differenceInWeeks(end, start)
+		case 'monthly':
+			return differenceInMonths(end, start)
+	}
+}
+
+/**
+ * Add periods to a date
+ */
+function addPeriod(date: Date, periods: number, bucket: CohortBucket): Date {
+	switch (bucket) {
+		case 'daily':
+			return addDays(date, periods)
+		case 'weekly':
+			return addWeeks(date, periods)
+		case 'monthly':
+			return addMonths(date, periods)
+	}
+}
+
+const DEFAULT_TIMEZONE = 'Asia/Tashkent' // UTC+5
+
+/**
+ * Get user's anchor event timestamp based on anchor type
+ * Uses workarounds for missing database fields
+ */
+async function getUserAnchorEvents(
+	anchor: CohortAnchor,
+	timezone: string = DEFAULT_TIMEZONE
+): Promise<Map<number, Date>> {
+	const supabase = getSupabaseAdmin()
+	const userAnchors = new Map<number, Date>()
+
+	switch (anchor) {
+		case 'acquisition': {
+			// Workaround: use users.created_at (registration ~= onboarding completion)
+			const { data: users } = await supabase
+				.from('users')
+				.select('id, created_at')
+				.not('created_at', 'is', null)
+
+			if (users) {
+				for (const user of users) {
+					const date = parseISO(user.created_at)
+					const zonedDate = toZonedTime(date, timezone)
+					userAnchors.set(user.id, zonedDate)
+				}
+			}
+			break
+		}
+
+		case 'activation': {
+			// Workaround: use first transaction as activation event
+			const { data: transactions } = await supabase
+				.from('transactions')
+				.select('user_id, created_at')
+				.order('created_at', { ascending: true })
+
+			if (transactions) {
+				const firstTxByUser = new Map<number, string>()
+				for (const tx of transactions) {
+					if (!firstTxByUser.has(tx.user_id)) {
+						firstTxByUser.set(tx.user_id, tx.created_at)
+					}
+				}
+
+				for (const [userId, createdAt] of firstTxByUser.entries()) {
+					const date = parseISO(createdAt)
+					const zonedDate = toZonedTime(date, timezone)
+					userAnchors.set(userId, zonedDate)
+				}
+			}
+			break
+		}
+
+		case 'billing': {
+			// Workaround: use first successful payment from payment_history
+			const { data: payments } = await supabase
+				.from('payment_history')
+				.select('user_id, created_at, status')
+				.order('created_at', { ascending: true })
+
+			if (payments) {
+				const firstPaymentByUser = new Map<number, string>()
+				for (const payment of payments) {
+					// Only consider successful/completed payments
+					if (payment.status && ['success', 'completed', 'paid'].includes(payment.status.toLowerCase())) {
+						if (!firstPaymentByUser.has(payment.user_id)) {
+							firstPaymentByUser.set(payment.user_id, payment.created_at)
+						}
+					}
+				}
+
+				for (const [userId, createdAt] of firstPaymentByUser.entries()) {
+					const date = parseISO(createdAt)
+					const zonedDate = toZonedTime(date, timezone)
+					userAnchors.set(userId, zonedDate)
+				}
+			}
+			break
+		}
+
+		case 'trial': {
+			// Workaround: use first subscription creation as trial start
+			// Note: In production you'd filter by plan_type='trial' or similar
+			const { data: subscriptions } = await supabase
+				.from('user_subscriptions')
+				.select('user_id, created_at')
+				.order('created_at', { ascending: true })
+
+			if (subscriptions) {
+				const firstSubByUser = new Map<number, string>()
+				for (const sub of subscriptions) {
+					if (!firstSubByUser.has(sub.user_id)) {
+						firstSubByUser.set(sub.user_id, sub.created_at)
+					}
+				}
+
+				for (const [userId, createdAt] of firstSubByUser.entries()) {
+					const date = parseISO(createdAt)
+					const zonedDate = toZonedTime(date, timezone)
+					userAnchors.set(userId, zonedDate)
+				}
+			}
+			break
+		}
+	}
+
+	return userAnchors
+}
+
+
+/**
+ * Data structure for bulk activity lookups (SUPER OPTIMIZED)
+ */
+type ActivityData = {
+	transactions: Map<number, Date[]> // userId -> array of transaction dates
+	miniappEvents: Map<number, Date[]> // userId -> array of miniapp event dates
+}
+
+/**
+ * Fetch ALL activity data for given users in ONE BATCH (2 queries total)
+ * This is dramatically faster than fetching per-period
+ */
+async function fetchAllActivityData(
+	userIds: number[],
+	minDate: Date,
+	maxDate: Date,
+	activeDefinition: ActiveDefinition,
+	timezone: string = DEFAULT_TIMEZONE
+): Promise<ActivityData> {
+	const supabase = getSupabaseAdmin()
+
+	// Convert to UTC for database queries
+	const utcMin = fromZonedTime(minDate, timezone)
+	const utcMax = fromZonedTime(maxDate, timezone)
+
+	const transactions = new Map<number, Date[]>()
+	const miniappEvents = new Map<number, Date[]>()
+
+	// Fetch ALL transactions for these users in date range (ONE QUERY)
+	if (activeDefinition === 'entries_only' || activeDefinition === 'entries_or_miniapp' || activeDefinition === 'entries_and_miniapp') {
+		const { data: txData } = await supabase
+			.from('transactions')
+			.select('user_id, created_at')
+			.in('user_id', userIds)
+			.gte('created_at', utcMin.toISOString())
+			.lt('created_at', utcMax.toISOString())
+			.order('created_at', { ascending: true })
+
+		if (txData) {
+			for (const tx of txData) {
+				const date = toZonedTime(parseISO(tx.created_at), timezone)
+				if (!transactions.has(tx.user_id)) {
+					transactions.set(tx.user_id, [])
+				}
+				transactions.get(tx.user_id)!.push(date)
+			}
+		}
+	}
+
+	// Fetch ALL miniapp events for these users in date range (ONE QUERY)
+	if (activeDefinition === 'miniapp_only' || activeDefinition === 'entries_or_miniapp' || activeDefinition === 'entries_and_miniapp') {
+		const { data: evtData } = await supabase
+			.from('marketing_events')
+			.select('user_id, created_at')
+			.in('user_id', userIds)
+			.eq('source', 'mini_app')
+			.gte('created_at', utcMin.toISOString())
+			.lt('created_at', utcMax.toISOString())
+			.order('created_at', { ascending: true })
+
+		if (evtData) {
+			for (const evt of evtData) {
+				const date = toZonedTime(parseISO(evt.created_at), timezone)
+				if (!miniappEvents.has(evt.user_id)) {
+					miniappEvents.set(evt.user_id, [])
+				}
+				miniappEvents.get(evt.user_id)!.push(date)
+			}
+		}
+	}
+
+	return { transactions, miniappEvents }
+}
+
+/**
+ * Check if user was active in period using pre-loaded activity data (IN-MEMORY)
+ */
+function isUserActiveInPeriod(
+	userId: number,
+	periodStart: Date,
+	periodEnd: Date,
+	activityData: ActivityData,
+	activeDefinition: ActiveDefinition
+): boolean {
+	// Check if user has transactions in period
+	const userTransactions = activityData.transactions.get(userId) || []
+	const hasEntries = userTransactions.some(date => date >= periodStart && date < periodEnd)
+
+	// Check if user has miniapp events in period
+	const userEvents = activityData.miniappEvents.get(userId) || []
+	const hasMiniapp = userEvents.some(date => date >= periodStart && date < periodEnd)
+
+	// Apply active definition logic
+	switch (activeDefinition) {
+		case 'entries_only':
+			return hasEntries
+		case 'miniapp_only':
+			return hasMiniapp
+		case 'entries_or_miniapp':
+			return hasEntries || hasMiniapp
+		case 'entries_and_miniapp':
+			return hasEntries && hasMiniapp
+		default:
+			return false
+	}
+}
+
+/**
+ * Main cohort retention calculation with correct W0, W1, W2 formula
+ * W0 = cohort size only (100% by definition)
+ * W1 = retention in next period after anchor
+ * W2 = retention 2 periods after anchor, etc.
+ *
+ * OPTIMIZED: Uses batch queries instead of per-user queries
+ */
+export async function calculateCohortRetention(params: {
+	anchor?: CohortAnchor
+	activeDefinition?: ActiveDefinition
+	bucket?: CohortBucket
+	windows?: number
+	limit?: number
+	startDate?: string
+	endDate?: string
+	timezone?: string
+}): Promise<CohortData> {
+	const {
+		anchor = 'activation',
+		activeDefinition = 'entries_or_miniapp',
+		bucket = 'weekly',
+		windows = 12,
+		limit,
+		timezone = DEFAULT_TIMEZONE
+	} = params
+
+	// Get user anchor events
+	const userAnchors = await getUserAnchorEvents(anchor, timezone)
+	if (userAnchors.size === 0) {
+		return { rows: [], totalUsers: 0, avgRetention: {}, bestCohort: null }
+	}
+
+	// Group users into cohorts by anchor date period
+	const cohortsMap = new Map<string, { cohort_key: string; cohort_date: Date; userIds: number[] }>()
+
+	for (const [userId, anchorDate] of userAnchors.entries()) {
+		const cohortDate = getStartOfPeriod(anchorDate, bucket)
+		const cohortKey = formatCohortKey(cohortDate, bucket)
+
+		if (!cohortsMap.has(cohortKey)) {
+			cohortsMap.set(cohortKey, {
+				cohort_key: cohortKey,
+				cohort_date: cohortDate,
+				userIds: []
+			})
+		}
+		cohortsMap.get(cohortKey)!.userIds.push(userId)
+	}
+
+	// Sort cohorts by date and apply limit
+	const sortedCohorts = Array.from(cohortsMap.values()).sort((a, b) =>
+		a.cohort_date.getTime() - b.cohort_date.getTime()
+	)
+	const limitedCohorts = limit ? sortedCohorts.slice(-limit) : sortedCohorts
+
+	if (limitedCohorts.length === 0) {
+		return { rows: [], totalUsers: 0, avgRetention: {}, bestCohort: null }
+	}
+
+	// SUPER OPTIMIZATION: Fetch ALL activity data for ALL cohort users ONCE
+	// Calculate date range needed: earliest cohort start to latest cohort end + windows
+	const earliestCohortDate = limitedCohorts[0].cohort_date
+	const latestCohortDate = limitedCohorts[limitedCohorts.length - 1].cohort_date
+	const maxPeriodEnd = addPeriod(latestCohortDate, windows + 1, bucket)
+
+	// Collect all unique user IDs across all cohorts
+	const allUserIds = Array.from(new Set(limitedCohorts.flatMap(c => c.userIds)))
+
+	// Fetch ALL activity data in ONE BATCH (just 2 queries total!)
+	console.log(`[Cohort] Fetching activity data for ${allUserIds.length} users from ${earliestCohortDate.toISOString()} to ${maxPeriodEnd.toISOString()}`)
+	const activityData = await fetchAllActivityData(
+		allUserIds,
+		earliestCohortDate,
+		maxPeriodEnd,
+		activeDefinition,
+		timezone
+	)
+	console.log(`[Cohort] Activity data loaded: ${activityData.transactions.size} users with transactions, ${activityData.miniappEvents.size} users with miniapp events`)
+
+	// Calculate retention for each cohort using in-memory lookups
+	const cohortRows: CohortRow[] = []
+	const windowPrefix = bucket === 'daily' ? 'D' : bucket === 'weekly' ? 'W' : 'M'
+
+	for (const cohort of limitedCohorts) {
+		const { cohort_key, cohort_date, userIds } = cohort
+		const cohortSize = userIds.length
+		const windowsData: Record<string, number> = {}
+		const absoluteData: Record<string, number> = {}
+
+		// W0 = cohort size (100% by definition)
+		windowsData['W0'] = 1.0
+		absoluteData['W0'] = cohortSize
+
+		// Calculate retention for W1, W2, W3, ... (periods AFTER cohort anchor)
+		for (let w = 1; w <= windows; w++) {
+			const periodStart = addPeriod(cohort_date, w, bucket)
+			const periodEnd = addPeriod(cohort_date, w + 1, bucket)
+
+			// Count active users in this period using IN-MEMORY lookup (no DB query!)
+			let activeCount = 0
+			for (const userId of userIds) {
+				if (isUserActiveInPeriod(userId, periodStart, periodEnd, activityData, activeDefinition)) {
+					activeCount++
+				}
+			}
+
+			const retentionRate = cohortSize > 0 ? activeCount / cohortSize : 0
+			const windowKey = `${windowPrefix}${w}`
+			windowsData[windowKey] = retentionRate
+			absoluteData[windowKey] = activeCount
+		}
+
+		cohortRows.push({
+			cohort_key,
+			cohort_date,
+			cohort_size: cohortSize,
+			users: userIds,
+			windows: windowsData,
+			absolute: absoluteData
+		})
+	}
+
+	// Calculate average retention across all cohorts (excluding W0)
+	const avgRetention: Record<string, number> = {}
+	avgRetention['W0'] = 1.0 // Always 100%
+
+	for (let w = 1; w <= windows; w++) {
+		const windowKey = `${windowPrefix}${w}`
+		const values = cohortRows.map(r => r.windows[windowKey] || 0)
+		avgRetention[windowKey] = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0
+	}
+
+	// Find best performing cohort (highest average retention excluding W0)
+	let bestCohort: string | null = null
+	let bestAvg = 0
+
+	for (const row of cohortRows) {
+		const retentionValues = Object.entries(row.windows)
+			.filter(([key]) => key !== 'W0') // Exclude W0 from average
+			.map(([, value]) => value)
+
+		if (retentionValues.length > 0) {
+			const avg = retentionValues.reduce((a, b) => a + b, 0) / retentionValues.length
+			if (avg > bestAvg) {
+				bestAvg = avg
+				bestCohort = row.cohort_key
+			}
+		}
+	}
+
+	return {
+		rows: cohortRows,
+		totalUsers: cohortRows.reduce((sum, r) => sum + r.cohort_size, 0),
+		avgRetention,
+		bestCohort
+	}
+}

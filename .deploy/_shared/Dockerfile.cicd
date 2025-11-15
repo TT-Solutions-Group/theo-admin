@@ -1,0 +1,10 @@
+FROM macbre/nginx-brotli:1.19.6-http3
+
+COPY .deploy/_shared/configs/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY .deploy/_shared/configs/nginx/nginx.conf /etc/nginx/nginx.conf
+
+COPY ../dist /var/www/public
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

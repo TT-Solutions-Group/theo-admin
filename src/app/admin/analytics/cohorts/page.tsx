@@ -1,9 +1,12 @@
 import { headers } from 'next/headers'
+import { CohortControls } from '@/components/admin/cohort-controls'
+import { CohortStatsCards } from '@/components/admin/cohort-stats-cards'
+import { CohortHeatmapTable } from '@/components/admin/cohort-heatmap-table'
 
-function resolveBaseUrl(): string {
+async function resolveBaseUrl(): Promise<string> {
   const envBase = process.env.NEXT_PUBLIC_APP_BASE_URL
   if (envBase) return String(envBase).replace(/\/$/, '')
-  const h = headers()
+  const h = await headers()
   const host = h.get('x-forwarded-host') || h.get('host') || 'localhost:3000'
   const proto = h.get('x-forwarded-proto') || 'http'
   return `${proto}://${host}`
@@ -11,67 +14,84 @@ function resolveBaseUrl(): string {
 
 async function fetchCohorts(params: URLSearchParams) {
   const qs = params.toString()
-  const base = resolveBaseUrl()
-  const h = headers()
+  const base = await resolveBaseUrl()
+  const h = await headers()
   const cookie = h.get('cookie') || ''
   const res = await fetch(`${base}/api/admin/analytics/cohorts${qs ? `?${qs}` : ''}`, {
     cache: 'no-store',
     headers: { cookie },
   })
-  if (!res.ok) return { ok: false, rows: [] as any[] }
+  if (!res.ok) {
+    console.error('Failed to fetch cohorts:', res.status, await res.text())
+    return { ok: false, data: { rows: [], totalUsers: 0, avgRetention: {}, bestCohort: null } }
+  }
   return res.json()
 }
 
-export default async function CohortsPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
-  const p = searchParams || {}
+export default async function CohortsPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const p = await searchParams || {}
   const params = new URLSearchParams()
+
+  // New parameters for cohort analytics (from cohort.md spec)
   params.set('anchor', String(p.anchor || 'activation'))
+  params.set('active_def', String(p.active_def || 'entries_or_miniapp'))
   params.set('bucket', String(p.bucket || 'weekly'))
-  params.set('active_def', String(p.active_def || 'entries_only_v1'))
+  params.set('windows', String(p.windows || '12'))
   params.set('limit', String(p.limit || '12'))
 
-  const data = await fetchCohorts(params)
-  const rows: Array<{ cohort_key: string; cohort_size: number; windows: Record<string, number> }> = data?.rows || []
+  const response = await fetchCohorts(params)
+  const data = response?.data || { rows: [], totalUsers: 0, avgRetention: {}, bestCohort: null }
+
+  // Get readable labels for display
+  const anchorLabels: Record<string, string> = {
+    acquisition: 'Acquisition (Registration)',
+    activation: 'Activation (First Entry)',
+    billing: 'Billing (First Payment)',
+    trial: 'Trial Start'
+  }
+
+  const activeDefLabels: Record<string, string> = {
+    entries_only: 'Entries Only',
+    miniapp_only: 'MiniApp Only',
+    entries_or_miniapp: 'Entries OR MiniApp',
+    entries_and_miniapp: 'Entries AND MiniApp'
+  }
+
+  const bucketLabels: Record<string, string> = {
+    daily: 'Daily',
+    weekly: 'Weekly',
+    monthly: 'Monthly'
+  }
+
+  const currentAnchor = String(p.anchor || 'activation')
+  const currentActiveDef = String(p.active_def || 'entries_or_miniapp')
+  const currentBucket = String(p.bucket || 'weekly')
 
   return (
     <div className="space-y-6">
+      {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-semibold">Cohorts</h1>
-        <p className="text-sm text-muted-foreground">Activation · Weekly · {data?.active_def}</p>
+        <h1 className="text-2xl font-semibold">Cohort Analytics</h1>
+        <p className="text-sm text-[rgb(var(--muted-foreground))]">
+          {anchorLabels[currentAnchor]} · {bucketLabels[currentBucket]} · {activeDefLabels[currentActiveDef]}
+        </p>
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr>
-              <th className="text-left p-2">Cohort</th>
-              <th className="text-left p-2">Size</th>
-              {Array.from({ length: 12 }).map((_, i) => (
-                <th key={i} className="text-left p-2">W{i + 1}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.cohort_key} className="border-t">
-                <td className="p-2">{r.cohort_key}</td>
-                <td className="p-2">{r.cohort_size}</td>
-                {Array.from({ length: 12 }).map((_, i) => {
-                  const key = `W${i + 1}`
-                  const v = r.windows?.[key]
-                  const pct = typeof v === 'number' ? Math.round(v * 100) : null
-                  return (
-                    <td key={key} className="p-2">
-                      {pct !== null ? `${pct}%` : '—'}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+      {/* Stats Cards */}
+      <CohortStatsCards
+        rows={data.rows}
+        avgRetention={data.avgRetention}
+        totalUsers={data.totalUsers}
+        bestCohort={data.bestCohort}
+      />
+
+      {/* Controls */}
+      <CohortControls />
+
+      {/* Heatmap Table */}
+      <CohortHeatmapTable
+        rows={data.rows}
+      />
     </div>
   )
 }
-
-
